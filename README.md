@@ -25,6 +25,8 @@ The API key goes into your MCP client config as an `X-Partner-Api-Key` HTTP head
 
 ### Claude Code
 
+**macOS / Linux (bash / zsh):**
+
 ```bash
 claude mcp add easypay \
   --transport sse \
@@ -33,6 +35,18 @@ claude mcp add easypay \
 
 claude skill add https://github.com/Berk13/easypay-skill
 ```
+
+**Windows (PowerShell):**
+
+PowerShell quoting eats the URL if `--header` comes before it. Use **URL before `--header`**, and **single quotes** around the header value:
+
+```powershell
+claude mcp add easypay --scope user --transport sse https://mcp.appload.tech/sse --header 'X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>'
+
+claude skill add https://github.com/Berk13/easypay-skill
+```
+
+If `claude mcp list` shows `easypay: ✗ Failed to connect`, run `claude mcp get easypay` — if `Type: stdio` (instead of `sse`) or `Command: \`, the PS quoting broke the install. Run `claude mcp remove easypay` and re-add with the exact PowerShell command above. Do NOT use `--header="..."` (the `=` confuses PS), do NOT put `--header` before the URL on Windows.
 
 ### Cursor
 
