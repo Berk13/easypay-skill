@@ -89,7 +89,7 @@ Once installed, ask your agent:
 Покажи мой профиль EasyPay и какие методы оплаты доступны
 ```
 
-The agent should call `verify_partner_api_key_and_get_profile` (no key in the prompt — it comes from your config) and reply with your partner name and available methods.
+The agent should call `verify_partner_credentials` (no key in the prompt — it comes from your config) and reply with your partner name and available methods.
 
 More example prompts will live in `examples.md` in the next release.
 

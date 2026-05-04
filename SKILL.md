@@ -21,7 +21,7 @@ If a tool returns `Invalid API key`, instruct the partner to re-check their MCP 
 All tools live under the MCP server `easypay-payments-mcp`.
 
 ### Profile & onboarding
-- **`verify_partner_api_key_and_get_profile`** — confirm the key works, return partner name, type, available payment methods. Run this first in a new session if you are unsure which partner you are talking to.
+- **`verify_partner_credentials`** — confirm the key works, return partner name, type, available payment methods. Run this first in a new session if you are unsure which partner you are talking to. (Legacy MCP server exposes this as `verify_partner_api_key_and_get_profile` — same backend; match whichever name appears in your `tools/list`.)
 - **`get_partner_onboarding_checklist`** — list of remaining onboarding steps (Stripe connect, Mercury account, crypto wallet, etc.).
 - **`request_additional_payment_methods`** — partner asks to enable a payment method that is not currently active (e.g. T-Bank for an existing US-only partner). Creates a request to the care team.
 
@@ -76,7 +76,7 @@ EasyPay использует флаг `is_test` на уровне партнёр
 ## Common JTBD flows
 
 ### J1 / J6 — Sell a one-time service to an international customer (USD/EUR)
-1. `verify_partner_api_key_and_get_profile` → подтвердить что Stripe доступен.
+1. `verify_partner_credentials` → подтвердить что Stripe доступен.
 2. `create_partner_stripe_product` с названием, ценой, валютой, payment methods (`card`, опц. `paypal`, `klarna`, `afterpay_clearpay`).
 3. Объяснить партнёру: продукт ушёл на модерацию, он получит уведомление в Telegram-группу когда будет approved.
 4. Когда approved — `create_partner_stripe_payment_link` → отдать короткую ссылку клиенту.
