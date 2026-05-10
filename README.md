@@ -72,10 +72,10 @@ claude skill add https://github.com/EasyPay-Labs/easypay-skill
 Use the EasyPay MCP server and explain what tools are available.
 ```
 
-**3. Recommended for permanent use** — drop the skill into your project:
+**3. Recommended for permanent use** — install the skill into your user folder:
 
 ```bash
-mkdir -p .cursor/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .cursor/skills/easypay/SKILL.md
+mkdir -p ~/.cursor/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o ~/.cursor/skills/easypay/SKILL.md
 ```
 
 ### Codex
