@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.2.0
+version: 0.3.0
 ---
 
 # EasyPay payments skill
@@ -21,7 +21,7 @@ If a tool returns `Invalid API key`, instruct the partner to re-check their MCP 
 All tools live under the MCP server `easypay-payments-mcp`.
 
 ### Profile & onboarding
-- **`verify_partner_credentials`** — confirm the key works, return partner name, type, available payment methods. Run this first in a new session if you are unsure which partner you are talking to. (Legacy MCP server exposes this as `verify_partner_api_key_and_get_profile` — same backend; match whichever name appears in your `tools/list`.)
+- **`verify_partner_credentials`** — confirm the key works, return partner name, type, available payment methods + active capabilities (Stripe / Mercury / Crypto / T-Bank). Run this first in a new session if you are unsure which partner you are talking to or which features are enabled.
 - **`get_partner_onboarding_checklist`** — list of remaining onboarding steps (Stripe connect, Mercury account, crypto wallet, etc.).
 - **`request_additional_payment_methods`** — partner asks to enable a payment method that is not currently active (e.g. T-Bank for an existing US-only partner). Creates a request to the care team.
 
@@ -44,6 +44,11 @@ All tools live under the MCP server `easypay-payments-mcp`.
 - **`register_partner_notifications_webhook`** — wire a partner Telegram chat / external webhook to receive real-time payment events.
 - **`check_notifications_bot_in_group`** — verify the EasyPay notifications bot is in the partner's Telegram group with the right permissions.
 - **`escalate_request_to_easypay_care_team`** — for anything the tools cannot do (refund, dispute, custom invoice, legal question), file a structured request with the care team. Always summarise what the partner already tried.
+
+### Notifications delivery — DM-fallback default
+New partners do **not** need a Telegram notifications group to start using EasyPay. Real-time payment events (Stripe payments, Mercury invoices, crypto wallet addresses) go directly to the partner's DM via `@easypay_onboarding_bot` until a dedicated notifications group is set up. This means `create_partner_crypto_invoice` returns wallet addresses in DM within seconds, even before group setup.
+
+If a partner asks "where do I see notifications?" — they arrive in their personal DM with `@easypay_onboarding_bot`. The dedicated group (with `@EasyPay_notifications_bot`) is **optional** and primarily for direct support conversations with the EasyPay care team. Suggest creating the support group only if the partner explicitly asks about team communication.
 
 ## Domain language
 

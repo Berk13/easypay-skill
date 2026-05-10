@@ -2,10 +2,10 @@
 
 Connect your AI agent to **EasyPay** in one command. Speak natural language:
 
-> «Создай продукт за 5000₽ через СБП»
-> «Сколько у меня сейчас денег в долларах и крипте?»
-> «Выставь инвойс на $1200 john@example.com»
-> «Закажи выплату подрядчику в РФ на 200 000 ₽»
+> «Создай Stripe-продукт «Продвинутый AI-курс» за $299 в test-режиме»
+> «Выставь крипто-инвойс на $20 за бандл виртуальной валюты»
+> «Выставь Bank Invoice клиенту john@example.com на $250 за LinkedIn-консультацию»
+> «Какие функции EasyPay у меня подключены, а какие ещё нет?»
 
 The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto / T-Bank, USD / EUR / RUB / CRYPTO, product lifecycle, payout flow) and which of the 17 MCP tools to call for each job.
 
@@ -15,7 +15,7 @@ The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto /
 
 1. **An EasyPay partner account** with an API key.
    Don't have one? Open [@easypay_onboarding_bot](https://t.me/easypay_onboarding_bot) in Telegram → choose the **MCP** path.
-2. **One of these CLI agents**: Claude Code, Cursor, Codex CLI, or Gemini CLI.
+2. **One of these CLI agents**: Claude Code, Cursor, Codex, or Gemini CLI.
 
 ---
 
@@ -33,7 +33,7 @@ claude mcp add easypay \
   --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" \
   https://mcp.appload.tech/sse
 
-claude skill add https://github.com/Berk13/easypay-skill
+claude skill add https://github.com/EasyPay-Labs/easypay-skill
 ```
 
 **Windows (PowerShell):**
@@ -43,7 +43,7 @@ PowerShell quoting eats the URL if `--header` comes before it. Use **URL before 
 ```powershell
 claude mcp add easypay --scope user --transport sse https://mcp.appload.tech/sse --header 'X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>'
 
-claude skill add https://github.com/Berk13/easypay-skill
+claude skill add https://github.com/EasyPay-Labs/easypay-skill
 ```
 
 If `claude mcp list` shows `easypay: ✗ Failed to connect`, run `claude mcp get easypay` — if `Type: stdio` (instead of `sse`) or `Command: \`, the PS quoting broke the install. Run `claude mcp remove easypay` and re-add with the exact PowerShell command above. Do NOT use `--header="..."` (the `=` confuses PS), do NOT put `--header` before the URL on Windows.
@@ -110,46 +110,25 @@ curl -s https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.
 
 ## Try it
 
-Once installed, ask your agent:
+Once installed, paste any of these into your agent:
 
 ```
-Покажи мой профиль EasyPay и какие методы оплаты доступны
+Создай Stripe-продукт «Продвинутый AI-курс» за $299 в test-режиме
 ```
 
-The agent should call `verify_partner_credentials` (no key in the prompt — it comes from your config) and reply with your partner name and available methods.
-
-More example prompts will live in `examples.md` in the next release.
-
----
-
-## Backward compatibility (existing partners on body-auth)
-
-Partners who configured EasyPay MCP before v0.2 use the legacy n8n MCP host (`https://n8n.thenextgen.store/mcp/easypay-payments-mcp/sse`) with the API key passed as a tool argument. That path still works — the same backend webhooks now accept either an `X-Partner-Api-Key` header (FastMCP path, key invisible to the model) or a body `partner_api_key` field (legacy path, key visible in tool args).
-
-If you are on legacy: keep working, no migration needed for the regatta. To switch to header-based, replace your MCP client config with the snippet above and remove any prompt that pastes the key into chat.
-
-## Emergency fallback
-
-If `https://mcp.appload.tech/sse` is unreachable (rare — single Hetzner VPS + Cloudflare Tunnel), use the legacy host as a temporary fallback:
-
-```bash
-# Claude Code — emergency body-auth path
-claude mcp add easypay-legacy \
-  --transport sse \
-  https://n8n.thenextgen.store/mcp/easypay-payments-mcp/sse
+```
+Выставь крипто-инвойс на $20 за бандл виртуальной валюты
 ```
 
-Then in your first message, paste:
-
 ```
-Use the easypay-legacy MCP server. My EasyPay API key is: <YOUR_PARTNER_API_KEY>
-
-<your real request>
+Выставь Bank Invoice клиенту john@example.com на $250 за LinkedIn-консультацию
 ```
 
-The agent will pass the key as a tool argument on each call (not as elegant, but resilient — the n8n MCP server runs on a different host than `mcp.appload.tech`).
+```
+Какие функции EasyPay у меня подключены, а какие ещё нет?
+```
 
-Notify [@andre_erokhin](https://t.me/andre_erokhin) so we can investigate the outage.
+The agent calls the right MCP tool (no key in the prompt — it comes from your config) and returns the result. For the first two test products / invoices, the EasyPay care team reviews and approves; you'll get a notification when the link or invoice is live.
 
 ---
 
@@ -162,13 +141,7 @@ Notify [@andre_erokhin](https://t.me/andre_erokhin) so we can investigate the ou
 
 ## Status
 
-**v0.2.0** — header-based authentication, public FastMCP server at `mcp.appload.tech`.
-
-Changes since v0.1.0:
-- Primary MCP host moved from `n8n.thenextgen.store/mcp/easypay-payments-mcp/sse` to `mcp.appload.tech/sse` (FastMCP wrapper, header-only auth).
-- API key now lives in MCP client config as `X-Partner-Api-Key` header — invisible to the model, never in tool arguments.
-- Legacy body-auth path remains live for backward compatibility (`Backward compatibility` section above).
-- Added emergency fallback section in case the FastMCP host is down on regatta day.
+**v0.3.0** — primary install path is FastMCP at `mcp.appload.tech` with header-based auth. Single source of truth for setup is this README.
 
 Not yet:
 - `examples.md` with copy-paste prompts (next release)
