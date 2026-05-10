@@ -2,10 +2,11 @@
 
 Connect your AI agent to **EasyPay** in one command. Speak natural language:
 
-> «Создай Stripe-продукт «Продвинутый AI-курс» за $299 в test-режиме»
-> «Выставь крипто-инвойс на $20 за бандл виртуальной валюты»
-> «Выставь Bank Invoice клиенту john@example.com на $250 за LinkedIn-консультацию»
-> «Какие функции EasyPay у меня подключены, а какие ещё нет?»
+> «Создай новый продукт в Stripe «Продвинутый AI-курс» за $299 в месяц»
+> «Создай для customer@example.ru ссылку на 25 000₽ через СБП»
+> «Сколько у меня сейчас денег в долларах и крипте?»
+> «Выставь банковский инвойс на $1200 john@example.com»
+> «Организуй выплату подрядчику в РФ на 200 000 ₽ с наших долларов»
 
 The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto / T-Bank, USD / EUR / RUB / CRYPTO, product lifecycle, payout flow) and which of the 17 MCP tools to call for each job.
 
@@ -113,22 +114,26 @@ curl -s https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.
 Once installed, paste any of these into your agent:
 
 ```
-Создай Stripe-продукт «Продвинутый AI-курс» за $299 в test-режиме
+Создай новый продукт в Stripe «Продвинутый AI-курс» за $299 в месяц
 ```
 
 ```
-Выставь крипто-инвойс на $20 за бандл виртуальной валюты
+Создай для customer@example.ru ссылку на 25 000₽ через СБП
 ```
 
 ```
-Выставь Bank Invoice клиенту john@example.com на $250 за LinkedIn-консультацию
+Сколько у меня сейчас денег в долларах и крипте?
 ```
 
 ```
-Какие функции EasyPay у меня подключены, а какие ещё нет?
+Выставь банковский инвойс на $1200 john@example.com
 ```
 
-The agent calls the right MCP tool (no key in the prompt — it comes from your config) and returns the result. For the first two test products / invoices, the EasyPay care team reviews and approves; you'll get a notification when the link or invoice is live.
+```
+Организуй выплату подрядчику в РФ на 200 000 ₽ с наших долларов
+```
+
+The agent calls the right MCP tool (no key in the prompt — it comes from your config) and returns the result. For products and invoices that need EasyPay moderation, you'll get a notification in your DM via `@easypay_onboarding_bot` once the link or invoice is live.
 
 ---
 
