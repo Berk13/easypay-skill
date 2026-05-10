@@ -68,15 +68,21 @@ Open Cursor settings → **MCP** → **Add new MCP server** → paste:
 
 Then drop [`SKILL.md`](./SKILL.md) into your `.cursor/rules/` folder (or paste its content into Cursor's "Rules for AI" settings).
 
-### Codex CLI
+### Codex
+
+Codex (OpenAI's standalone desktop app) `codex mcp add` does **not** support
+custom headers directly — bridge through the `mcp-remote` npm package
+(stdio ↔ SSE+headers). Single-line, works on Windows / macOS / Linux without
+backslash continuation. Requires Node.js + `npx` (most devs already have).
 
 ```bash
-codex mcp add easypay \
-  --url https://mcp.appload.tech/sse \
-  --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
+codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
+```
 
-# Skill: paste SKILL.md content into ~/.codex/instructions.md
-curl -s https://raw.githubusercontent.com/Berk13/easypay-skill/main/SKILL.md \
+Skill — paste SKILL.md content into `~/.codex/instructions.md`:
+
+```bash
+curl -s https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md \
   >> ~/.codex/instructions.md
 ```
 
@@ -89,9 +95,16 @@ gemini mcp add easypay \
   https://mcp.appload.tech/sse
 
 # Skill: append SKILL.md to your Gemini system instructions
-curl -s https://raw.githubusercontent.com/Berk13/easypay-skill/main/SKILL.md \
+curl -s https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md \
   >> ~/.gemini/system-instructions.md
 ```
+
+> **If Gemini errors on `--header`** (older versions don't support it), use
+> the same mcp-remote bridge as Codex above:
+>
+> ```bash
+> gemini mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
+> ```
 
 ---
 
