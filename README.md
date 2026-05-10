@@ -24,34 +24,33 @@ The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto /
 
 The API key goes into your MCP client config as an `X-Partner-Api-Key` HTTP header — **not into the chat**. The model never sees it; the FastMCP server at `mcp.appload.tech` validates and forwards it on every tool call.
 
+Each CLI gets the same three steps: **(1)** connect the MCP server, **(2)** verify the agent sees the tools, **(3)** install the skill so the agent speaks EasyPay's vocabulary. All commands are single-line and work on Windows, macOS, and Linux unless noted.
+
 ### Claude Code
 
-**macOS / Linux (bash / zsh):**
+**1. Connect the MCP server** (one command, works in bash/zsh AND PowerShell):
 
 ```bash
-claude mcp add easypay \
-  --transport sse \
-  --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" \
-  https://mcp.appload.tech/sse
+claude mcp add easypay --transport sse https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
+```
 
+**2. Verify** — ask Claude:
+
+```
+Use the EasyPay MCP server and explain what tools are available.
+```
+
+**3. Recommended for permanent use** — install the skill (teaches Claude EasyPay vocabulary and flows):
+
+```bash
 claude skill add https://github.com/EasyPay-Labs/easypay-skill
 ```
 
-**Windows (PowerShell):**
-
-PowerShell quoting eats the URL if `--header` comes before it. Use **URL before `--header`**, and **single quotes** around the header value:
-
-```powershell
-claude mcp add easypay --scope user --transport sse https://mcp.appload.tech/sse --header 'X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>'
-
-claude skill add https://github.com/EasyPay-Labs/easypay-skill
-```
-
-If `claude mcp list` shows `easypay: ✗ Failed to connect`, run `claude mcp get easypay` — if `Type: stdio` (instead of `sse`) or `Command: \`, the PS quoting broke the install. Run `claude mcp remove easypay` and re-add with the exact PowerShell command above. Do NOT use `--header="..."` (the `=` confuses PS), do NOT put `--header` before the URL on Windows.
+> **Diagnostic:** if `claude mcp list` shows `easypay: ✗ Failed to connect`, run `claude mcp get easypay` — if it shows `Type: stdio` or `Command: \`, the shell mangled quoting. `claude mcp remove easypay` and rerun the exact command above (URL before `--header`, double quotes — works on both bash and PS).
 
 ### Cursor
 
-Open Cursor settings → **MCP** → **Add new MCP server** → paste:
+**1. Connect the MCP server** — Settings → **MCP** → **Add new MCP server** → paste:
 
 ```json
 {
@@ -67,41 +66,61 @@ Open Cursor settings → **MCP** → **Add new MCP server** → paste:
 }
 ```
 
-Then drop [`SKILL.md`](./SKILL.md) into your `.cursor/rules/` folder (or paste its content into Cursor's "Rules for AI" settings).
+**2. Verify** — ask Cursor:
+
+```
+Use the EasyPay MCP server and explain what tools are available.
+```
+
+**3. Recommended for permanent use** — drop the skill into your project:
+
+```bash
+mkdir -p .cursor/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .cursor/skills/easypay/SKILL.md
+```
 
 ### Codex
 
-Codex (OpenAI's standalone desktop app) `codex mcp add` does **not** support
-custom headers directly — bridge through the `mcp-remote` npm package
-(stdio ↔ SSE+headers). Single-line, works on Windows / macOS / Linux without
-backslash continuation. Requires Node.js + `npx` (most devs already have).
+Codex (OpenAI's standalone desktop app) doesn't accept custom headers on `codex mcp add` — we bridge through the `mcp-remote` npm package (stdio ↔ SSE+headers). Requires Node.js + `npx` (most devs have it).
+
+**1. Connect the MCP server**:
 
 ```bash
 codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
 ```
 
-Skill — paste SKILL.md content into `~/.codex/instructions.md`:
+**2. Verify** — ask Codex:
+
+```
+Use the EasyPay MCP server and explain what tools are available.
+```
+
+**3. Recommended for permanent use** — install the skill into your global agents folder:
 
 ```bash
-curl -s https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md \
-  >> ~/.codex/instructions.md
+mkdir -p ~/.agents/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o ~/.agents/skills/easypay/SKILL.md
 ```
 
 ### Gemini CLI
 
-```bash
-gemini mcp add easypay \
-  --transport sse \
-  --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" \
-  https://mcp.appload.tech/sse
+**1. Connect the MCP server**:
 
-# Skill: append SKILL.md to your Gemini system instructions
-curl -s https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md \
-  >> ~/.gemini/system-instructions.md
+```bash
+gemini mcp add easypay --transport sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" https://mcp.appload.tech/sse
 ```
 
-> **If Gemini errors on `--header`** (older versions don't support it), use
-> the same mcp-remote bridge as Codex above:
+**2. Verify** — ask Gemini:
+
+```
+Use the EasyPay MCP server and explain what tools are available.
+```
+
+**3. Recommended for permanent use** — install the skill:
+
+```bash
+mkdir -p ~/.gemini/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o ~/.gemini/easypay/SKILL.md
+```
+
+> **If your Gemini version doesn't accept `--header`** (rare — verified working 2026-05-10), use the `mcp-remote` bridge as in Codex:
 >
 > ```bash
 > gemini mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
