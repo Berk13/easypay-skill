@@ -24,33 +24,67 @@ The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto /
 
 The API key goes into your MCP client config as an `X-Partner-Api-Key` HTTP header — **not into the chat**. The model never sees it; the FastMCP server at `mcp.appload.tech` validates and forwards it on every tool call.
 
-Each CLI gets the same three steps: **(1)** connect the MCP server, **(2)** verify the agent sees the tools, **(3)** install the skill so the agent speaks EasyPay's vocabulary. All commands are single-line and work on Windows, macOS, and Linux unless noted.
+Three CLI agents (**Claude Code / Codex / Gemini**) can install themselves — paste **one prompt**, the agent runs the commands. **Cursor** uses a JSON config paste because its MCP setup lives in Settings UI.
+
+After install, the **first prompt** to send to your agent is universal:
+
+```
+Walk me through EasyPay onboarding so I can pick what fits my business and start accepting real payments.
+```
+
+For example prompts, alternative skill paths, and troubleshooting — see the [EasyPay MCP Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04).
 
 ### Claude Code
 
-**1. Connect the MCP server** (one command, works in bash/zsh AND PowerShell):
+**1. The easy path** — paste this prompt into Claude and let it install everything:
+
+```
+Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: claude mcp add easypay --transport sse https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" ; mkdir -p .claude/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .claude/skills/easypay/SKILL.md
+```
+
+**2. Or install manually**:
 
 ```bash
 claude mcp add easypay --transport sse https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
 ```
 
-**2. Verify** — ask Claude:
+> If `claude mcp list` shows `easypay: ✗ Failed to connect`, run `claude mcp get easypay` — if it shows `Type: stdio` or `Command: \`, the shell mangled quoting. `claude mcp remove easypay` and rerun the exact command above (URL before `--header`, double quotes — works on bash and PS).
+
+### Codex
+
+Codex doesn't accept `--header` on `codex mcp add` — we bridge through the `mcp-remote` npm package (stdio ↔ SSE+headers). Requires Node.js + `npx`.
+
+**1. The easy path** — paste this prompt into Codex:
 
 ```
-Use the EasyPay MCP server and explain what tools are available.
+Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" ; mkdir -p .agents/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .agents/skills/easypay/SKILL.md
 ```
 
-**3. Recommended for permanent use** — install the skill (teaches Claude EasyPay vocabulary and flows):
+**2. Or install manually**:
 
 ```bash
-claude skill add https://github.com/EasyPay-Labs/easypay-skill
+codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
 ```
 
-> **Diagnostic:** if `claude mcp list` shows `easypay: ✗ Failed to connect`, run `claude mcp get easypay` — if it shows `Type: stdio` or `Command: \`, the shell mangled quoting. `claude mcp remove easypay` and rerun the exact command above (URL before `--header`, double quotes — works on both bash and PS).
+### Gemini CLI
+
+**1. The easy path** — paste this prompt into Gemini:
+
+```
+Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: gemini mcp add easypay --transport sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" https://mcp.appload.tech/sse ; mkdir -p .agents/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .agents/skills/easypay/SKILL.md
+```
+
+**2. Or install manually**:
+
+```bash
+gemini mcp add easypay --transport sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" https://mcp.appload.tech/sse
+```
+
+> If your Gemini version doesn't accept `--header` (rare — verified working 2026-05-10), use the `mcp-remote` bridge as in Codex.
 
 ### Cursor
 
-**1. Connect the MCP server** — Settings → **MCP** → **Add new MCP server** → paste:
+Cursor's MCP install is a JSON config pasted into Settings → **MCP** → **Add new MCP server**:
 
 ```json
 {
@@ -66,93 +100,15 @@ claude skill add https://github.com/EasyPay-Labs/easypay-skill
 }
 ```
 
-**2. Verify** — ask Cursor:
-
-```
-Use the EasyPay MCP server and explain what tools are available.
-```
-
-**3. Recommended for permanent use** — install the skill into your user folder:
-
-```bash
-mkdir -p ~/.cursor/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o ~/.cursor/skills/easypay/SKILL.md
-```
-
-### Codex
-
-Codex (OpenAI's standalone desktop app) doesn't accept custom headers on `codex mcp add` — we bridge through the `mcp-remote` npm package (stdio ↔ SSE+headers). Requires Node.js + `npx` (most devs have it).
-
-**1. Connect the MCP server**:
-
-```bash
-codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
-```
-
-**2. Verify** — ask Codex:
-
-```
-Use the EasyPay MCP server and explain what tools are available.
-```
-
-**3. Recommended for permanent use** — install the skill into your global agents folder:
-
-```bash
-mkdir -p ~/.agents/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o ~/.agents/skills/easypay/SKILL.md
-```
-
-### Gemini CLI
-
-**1. Connect the MCP server**:
-
-```bash
-gemini mcp add easypay --transport sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" https://mcp.appload.tech/sse
-```
-
-**2. Verify** — ask Gemini:
-
-```
-Use the EasyPay MCP server and explain what tools are available.
-```
-
-**3. Recommended for permanent use** — install the skill:
-
-```bash
-mkdir -p ~/.gemini/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o ~/.gemini/easypay/SKILL.md
-```
-
-> **If your Gemini version doesn't accept `--header`** (rare — verified working 2026-05-10), use the `mcp-remote` bridge as in Codex:
->
-> ```bash
-> gemini mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
-> ```
+The skill for Cursor goes into your project folder — see the [Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) for the exact path.
 
 ---
 
-## Try it
+## After install — full guide
 
-Once installed, paste any of these into your agent:
+Example prompts (Stripe products, crypto/bank invoices, payouts, balance), alternative skill paths (user-home vs project-local), per-CLI nuances, and troubleshooting all live in the [EasyPay MCP Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) (RU + EN).
 
-```
-Создай новый продукт в Stripe «Продвинутый AI-курс» за $299 в месяц
-```
-
-```
-Создай для customer@example.ru ссылку на 25 000₽ через СБП
-```
-
-```
-Сколько у меня сейчас денег в долларах и крипте?
-```
-
-```
-Выставь банковский инвойс на $1200 john@example.com
-```
-
-```
-Организуй выплату подрядчику в РФ на 200 000 ₽ с наших долларов
-```
-
-The agent calls the right MCP tool (no key in the prompt — it comes from your config) and returns the result. For products and invoices that need EasyPay moderation, you'll get a notification in your DM via `@easypay_onboarding_bot` once the link or invoice is live.
+For products and invoices that need EasyPay moderation, you'll get a notification in your DM via `@easypay_onboarding_bot` once the link or invoice is live.
 
 ---
 
@@ -165,10 +121,9 @@ The agent calls the right MCP tool (no key in the prompt — it comes from your 
 
 ## Status
 
-**v0.3.0** — primary install path is FastMCP at `mcp.appload.tech` with header-based auth. Single source of truth for setup is this README.
+**v0.4.0** — agentic-primary install (paste one prompt, agent runs it) + manual fallback per CLI. Skill downloaded into project (`.claude/skills/easypay/` for Claude Code, `.agents/skills/easypay/` for Codex & Gemini, project-local for Cursor — see Customer Guide). README is the install quickstart; [Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) is the source of truth for examples, alternative paths, and troubleshooting.
 
 Not yet:
-- `examples.md` with copy-paste prompts (next release)
 - CI markdown linter
 - npm package
 - Localizations beyond RU/EN
