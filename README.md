@@ -39,31 +39,31 @@ For example prompts, alternative skill paths, and troubleshooting — see the [E
 **1. The easy path** — paste this prompt into Claude and let it install everything:
 
 ```
-Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: claude mcp add easypay --transport sse https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" ; mkdir -p .claude/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .claude/skills/easypay/SKILL.md
+Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: claude mcp add easypay --transport http https://mcp.appload.tech/mcp/ --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" ; mkdir -p .claude/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .claude/skills/easypay/SKILL.md
 ```
 
 **2. Or install manually**:
 
 ```bash
-claude mcp add easypay --transport sse https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
+claude mcp add easypay --transport http https://mcp.appload.tech/mcp/ --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
 ```
 
 > If `claude mcp list` shows `easypay: ✗ Failed to connect`, run `claude mcp get easypay` — if it shows `Type: stdio` or `Command: \`, the shell mangled quoting. `claude mcp remove easypay` and rerun the exact command above (URL before `--header`, double quotes — works on bash and PS).
 
 ### Codex
 
-Codex doesn't accept `--header` on `codex mcp add` — we bridge through the `mcp-remote` npm package (stdio ↔ SSE+headers). Requires Node.js + `npx`.
+Codex doesn't accept `--header` on `codex mcp add` — we bridge through the `mcp-remote` npm package (stdio ↔ HTTP+headers). Requires Node.js + `npx`.
 
 **1. The easy path** — paste this prompt into Codex:
 
 ```
-Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" ; mkdir -p .agents/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .agents/skills/easypay/SKILL.md
+Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/mcp/ --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" ; mkdir -p .agents/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .agents/skills/easypay/SKILL.md
 ```
 
 **2. Or install manually**:
 
 ```bash
-codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
+codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/mcp/ --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>"
 ```
 
 ### Gemini CLI
@@ -71,13 +71,13 @@ codex mcp add easypay -- npx -y mcp-remote https://mcp.appload.tech/sse --header
 **1. The easy path** — paste this prompt into Gemini:
 
 ```
-Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: gemini mcp add easypay --transport sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" https://mcp.appload.tech/sse ; mkdir -p .agents/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .agents/skills/easypay/SKILL.md
+Install the EasyPay MCP server and connect the skill for this project. To do this, run two commands — adapt them to your current environment if needed: gemini mcp add easypay --transport http --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" https://mcp.appload.tech/mcp/ ; mkdir -p .agents/skills/easypay && curl -fsSL https://raw.githubusercontent.com/EasyPay-Labs/easypay-skill/main/SKILL.md -o .agents/skills/easypay/SKILL.md
 ```
 
 **2. Or install manually**:
 
 ```bash
-gemini mcp add easypay --transport sse --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" https://mcp.appload.tech/sse
+gemini mcp add easypay --transport http --header "X-Partner-Api-Key: <YOUR_PARTNER_API_KEY>" https://mcp.appload.tech/mcp/
 ```
 
 > If your Gemini version doesn't accept `--header` (rare — verified working 2026-05-10), use the `mcp-remote` bridge as in Codex.
@@ -90,8 +90,8 @@ Cursor's MCP install is a JSON config pasted into Settings → **MCP** → **Add
 {
   "mcpServers": {
     "easypay": {
-      "url": "https://mcp.appload.tech/sse",
-      "transport": "sse",
+      "url": "https://mcp.appload.tech/mcp/",
+      "transport": "http",
       "headers": {
         "X-Partner-Api-Key": "<YOUR_PARTNER_API_KEY>"
       }
@@ -121,7 +121,7 @@ For products and invoices that need EasyPay moderation, you'll get a notificatio
 
 ## Status
 
-**v0.4.0** — agentic-primary install (paste one prompt, agent runs it) + manual fallback per CLI. Skill downloaded into project (`.claude/skills/easypay/` for Claude Code, `.agents/skills/easypay/` for Codex & Gemini, project-local for Cursor — see Customer Guide). README is the install quickstart; [Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) is the source of truth for examples, alternative paths, and troubleshooting.
+**v0.5.0** — Streamable HTTP transport at `/mcp/` (MCP spec 2025-03-26) in stateless mode. Legacy SSE endpoint at `/sse` keeps working for existing installations but is no longer documented for new installs; switch to `/mcp/` at your convenience. Agentic-primary install (paste one prompt, agent runs it) + manual fallback per CLI. Skill downloaded into project (`.claude/skills/easypay/` for Claude Code, `.agents/skills/easypay/` for Codex & Gemini, project-local for Cursor — see Customer Guide). README is the install quickstart; [Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) is the source of truth for examples, alternative paths, and troubleshooting.
 
 Not yet:
 - CI markdown linter
