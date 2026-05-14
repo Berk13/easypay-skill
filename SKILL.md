@@ -26,6 +26,7 @@ All tools live under the MCP server `easypay-payments-mcp`.
 - **`request_additional_payment_methods`** — partner asks to enable a payment method that is not currently active (e.g. T-Bank for an existing US-only partner). Creates a request to the care team.
 
 ### Money in: products & payment links
+- **`create_partner_onboarding_test_products`** — **onboarding-only, single-shot bypass of moderation.** When a brand-new partner has no products yet AND onboarding is incomplete, this creates 3 canonical Stripe test payment links ($50 one-time / $100/mo subscription / $100/mo subscription with 30% promo) + a public showcase URL (`https://demo.appsign.me/<uuid>`) the partner can share with prospects as a demo. AI generates contextual `description` for each slot based on partner's `business_description`. Once products exist (or onboarding is complete), this tool is closed — use `create_partner_stripe_product` for additions.
 - **`create_partner_stripe_product`** — create a one-time or subscription product in Stripe. Goes through `pending_moderation → approved → live`. Used for: cards, wallets, BNPL, recurring billing in USD/EUR.
 - **`create_partner_stripe_payment_link`** — generate a payment link for an already-approved Stripe product (re-use the product, get a fresh short URL).
 - **`list_partner_live_stripe_payment_links`** — show currently active Stripe payment links (for re-sending or audit).

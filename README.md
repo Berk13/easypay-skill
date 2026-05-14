@@ -8,7 +8,7 @@ Connect your AI agent to **EasyPay** in one command. Speak natural language:
 > «Выставь банковский инвойс на $1200 john@example.com»
 > «Организуй выплату подрядчику в РФ на 200 000 ₽ с наших долларов»
 
-The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto / T-Bank, USD / EUR / RUB / CRYPTO, product lifecycle, payout flow) and which of the 17 MCP tools to call for each job.
+The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto / T-Bank, USD / EUR / RUB / CRYPTO, product lifecycle, payout flow) and which of the 18 MCP tools to call for each job.
 
 ---
 
@@ -31,6 +31,14 @@ After install, the **first prompt** to send to your agent is universal:
 ```
 Walk me through EasyPay onboarding so I can pick what fits my business and start accepting real payments.
 ```
+
+**Brand new partner without test products yet?** Ask your agent to seed 3 canonical demo links + a public showcase page in one call:
+
+```
+Create demo test products for my business: <one sentence describing what you sell>.
+```
+
+The agent invokes `create_partner_onboarding_test_products` — three Stripe test payment links ($50 one-time, $100/mo subscription, $100/mo subscription with 30% promo code) + a public showcase URL (`https://demo.appsign.me/<uuid>`) you can share with prospects to demo the checkout. Onboarding-only — once you have products this path is closed; new ones go through care-team moderation via `create_partner_stripe_product`.
 
 For example prompts, alternative skill paths, and troubleshooting — see the [EasyPay MCP Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04).
 
@@ -114,7 +122,7 @@ For products and invoices that need EasyPay moderation, you'll get a notificatio
 
 ## What's inside
 
-- [`SKILL.md`](./SKILL.md) — the system prompt: 17 tools, EasyPay domain language, JTBD flows, anti-patterns.
+- [`SKILL.md`](./SKILL.md) — the system prompt: 18 tools, EasyPay domain language, JTBD flows, anti-patterns.
 - [`LICENSE`](./LICENSE) — MIT.
 
 ---
