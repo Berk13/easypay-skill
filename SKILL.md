@@ -40,10 +40,10 @@ All tools live under the MCP server `easypay-payments-mcp`.
 - **`list_partner_saved_payout_recipients`** — list saved payout recipients (contractors, employees) so the partner can pick by name instead of re-entering bank details.
 - **`create_partner_payout_request`** — submit a payout request. **This does not move money instantly** — it creates a request the EasyPay ops team will execute manually within the published SLA.
 
-### Notifications & escalation
+### Notifications & care-team requests
 - **`register_partner_notifications_webhook`** — wire a partner Telegram chat / external webhook to receive real-time payment events.
 - **`check_notifications_bot_in_group`** — verify the EasyPay notifications bot is in the partner's Telegram group with the right permissions.
-- **`escalate_request_to_easypay_care_team`** — for anything the tools cannot do (refund, dispute, custom invoice, legal question), file a structured request with the care team. Always summarise what the partner already tried.
+- **`send_request_to_easypay_care_team`** — write a request to the EasyPay care team for anything the tools cannot do (refund, dispute, custom invoice, legal question), AND as the primary single-move play during onboarding step 2 — compile what the partner sells (description + product / site / showcase links) and send it in one call: opens the team chat AND starts the review.
 
 ### Notifications delivery — DM-fallback default
 New partners do **not** need a Telegram notifications group to start using EasyPay. Real-time payment events (Stripe payments, Mercury invoices, crypto wallet addresses) go directly to the partner's DM via `@easypay_onboarding_bot` until a dedicated notifications group is set up. This means `create_partner_crypto_invoice` returns wallet addresses in DM within seconds, even before group setup.
@@ -116,12 +116,12 @@ EasyPay использует флаг `is_test` на уровне партнёр
 ### J7 — Failed payment / dispute / refund
 1. У вас **нет** тулов для рефанда, dispute resolution, fraud investigation.
 2. Соберите контекст у партнёра (transaction id, customer email, что произошло).
-3. `escalate_request_to_easypay_care_team` со всем собранным контекстом.
+3. `send_request_to_easypay_care_team` со всем собранным контекстом.
 
 ## Anti-patterns: what NOT to do
 
 - ❌ **Never** ask the partner to paste their API key into the chat. Auth is via MCP header. Если key invalid — пусть фикcит config.
-- ❌ **Never** invent tools. Если партнёр просит «удалить мой продукт», «отменить charge», «вернуть деньги», «изменить цену продукта» — таких тулов нет, идите в `escalate_request_to_easypay_care_team`.
+- ❌ **Never** invent tools. Если партнёр просит «удалить мой продукт», «отменить charge», «вернуть деньги», «изменить цену продукта» — таких тулов нет, идите в `send_request_to_easypay_care_team`.
 - ❌ **Don't** promise instant payouts. `create_partner_payout_request` — это очередь, не моментальный transfer.
 - ❌ **Don't** promise instant payment link after `create_partner_stripe_product`. Сначала модерация, потом link.
 - ❌ **Don't** suggest EUR through Mercury invoice — Mercury только USD.
@@ -131,4 +131,4 @@ EasyPay использует флаг `is_test` на уровне партнёр
 
 ## When in doubt
 
-Escalate. `escalate_request_to_easypay_care_team` — лучший выбор для всего, что выходит за рамки 16 операционных тулов. Не пытайтесь угадать или импровизировать с деньгами партнёра.
+Write to the care team. `send_request_to_easypay_care_team` — лучший выбор для всего, что выходит за рамки 16 операционных тулов. Не пытайтесь угадать или импровизировать с деньгами партнёра.
