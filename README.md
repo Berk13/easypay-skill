@@ -110,6 +110,16 @@ Example prompts (Stripe products, crypto/bank invoices, payouts, balance), alter
 
 For products and invoices that need EasyPay moderation, you'll get a notification in your DM via `@easypay_onboarding_bot` once the link or invoice is live.
 
+## Identity controls (v0.4 backend, 2026-05-25)
+
+Money-moving operations (`create_partner_payout_request`) require a mini-app session — your AI agent will receive `ACTOR_REQUIRED` 403 instead of executing the payout. Open the EasyPay mini-app to submit payouts: [https://t.me/easypay_self_service_bot/dashboard](https://t.me/easypay_self_service_bot/dashboard). Read-only preview (`preview_partner_payout_options`) still works through the agent.
+
+If your agent references a `stripe_product_id` / `payment_link_id` / `recipient_id` that doesn't belong to your account, you'll get `CROSS_TENANT_ATTEMPT` 403 (not a generic "not found"). Use `list_partner_invoiceable_products` / `list_partner_live_stripe_payment_links` to discover your own IDs.
+
+`DATA_INTEGRITY_ERROR` 500 — a server-side issue on EasyPay; care team gets paged automatically, just retry after a moment.
+
+All 39 active partners + 58 employees already received the new permission codes (`balance_view` / `recipients_view` / `products_view` / `support_contact` / `webhook_config` / `payment_method_request` / `session_mint`) — your existing API key keeps working.
+
 ---
 
 ## What's inside
@@ -121,7 +131,7 @@ For products and invoices that need EasyPay moderation, you'll get a notificatio
 
 ## Status
 
-**v0.5.0** — Streamable HTTP transport at `/mcp/` (MCP spec 2025-03-26) in stateless mode. Legacy SSE endpoint at `/sse` keeps working for existing installations but is no longer documented for new installs; switch to `/mcp/` at your convenience. Agentic-primary install (paste one prompt, agent runs it) + manual fallback per CLI. Skill downloaded into project (`.claude/skills/easypay/` for Claude Code, `.agents/skills/easypay/` for Codex & Gemini, project-local for Cursor — see Customer Guide). README is the install quickstart; [Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) is the source of truth for examples, alternative paths, and troubleshooting.
+**v0.5.0** — Streamable HTTP transport at `/mcp/` (MCP spec 2025-03-26) in stateless mode. Legacy SSE endpoint at `/sse` keeps working for existing installations but is no longer documented for new installs; switch to `/mcp/` at your convenience. Backend openapi v0.4.0 (P0 fintech baseline 2026-05-25): payout requires mini-app session, cross-tenant ID misuse returns `CROSS_TENANT_ATTEMPT` 403 (see "Identity controls" above). Agentic-primary install (paste one prompt, agent runs it) + manual fallback per CLI. Skill downloaded into project (`.claude/skills/easypay/` for Claude Code, `.agents/skills/easypay/` for Codex & Gemini, project-local for Cursor — see Customer Guide). README is the install quickstart; [Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) is the source of truth for examples, alternative paths, and troubleshooting.
 
 Not yet:
 - CI markdown linter
