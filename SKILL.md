@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.4.0
+version: 0.5.0
 ---
 
 # EasyPay payments skill
@@ -87,16 +87,18 @@ EasyPay использует флаг `is_test` на уровне партнёр
 4. Когда approved — `create_partner_stripe_payment_link` → отдать короткую ссылку клиенту.
 
 ### J1.4 — Bill an existing US/EU client by invoice (USD)
-1. `list_partner_invoiceable_products` → если нужный продукт уже есть, пропустить шаг 2.
-2. Иначе `create_partner_mercury_invoice` с email клиента, суммой, описанием.
-3. Mercury автоматически отправит инвойс клиенту по email. Партнёру скажите номер инвойса для трекинга.
+1. `list_partner_invoiceable_products({currency:'USD'})` → найти продукт, взять его `product_id`.
+2. Если нужного продукта нет — `create_partner_mercury_invoiceable_product` (USD), дождаться approve, затем повторить шаг 1.
+3. `create_partner_mercury_invoice` с `product_id` (из списка) + `customer_email` (+ опц. `unit_amount_override`, если сумма отличается от дефолтной цены продукта).
+4. Mercury автоматически отправит инвойс клиенту по email. Партнёру скажите номер инвойса для трекинга.
 
 ### J1.3 — Accept payment from a Russian B2C customer (RUB)
-1. `create_partner_tbank_payment` с суммой в RUB и описанием.
-2. Если у партнёра не подключён T-Bank — `request_additional_payment_methods` со словом `tbank`.
+1. `list_partner_invoiceable_products({currency:'RUB'})` → найти RUB-продукт и его `product_id`. Если продукта нет — `create_partner_ruble_payable_product`, дождаться approve.
+2. `create_partner_tbank_payment` с `product_id` + `customer_email` ИЛИ `customer_phone` (+ опц. `unit_amount_override` в рублях).
+3. Если у партнёра не подключён T-Bank — `request_additional_payment_methods` со словом `russia`.
 
 ### J1 (alt) — Customer prefers crypto
-1. `create_partner_crypto_invoice` с суммой в USD и валютой `USDT` или `USDC`.
+1. `create_partner_crypto_invoice` с `amount_usd`, `customer_email` (+ опц. `cryptos: ['USDT','USDC']`).
 2. Отдать партнёру кошелёк + сумму. Платёж засчитается после N подтверждений.
 
 ### J5 / J17 — «Сколько у меня сейчас денег?»
