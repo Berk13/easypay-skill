@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.5.0
+version: 0.6.0
 ---
 
 # EasyPay payments skill
@@ -29,6 +29,7 @@ All tools live under the MCP server `easypay-payments-mcp`.
 - **`create_partner_stripe_product`** — create a one-time or subscription product in Stripe. Goes through `pending_moderation → approved → live`. Used for: cards, wallets, BNPL, recurring billing in USD/EUR. Pass `is_test: true` to create a test-mode product (real card not charged) for partner-side experimentation; `is_test: false` (default) creates a real-mode product. **Both go through the same care-team moderation** (typically ≤ 2 hours).
 - **`create_partner_stripe_payment_link`** — generate a payment link for an already-approved Stripe product (re-use the product, get a fresh short URL).
 - **`list_partner_live_stripe_payment_links`** — show currently active Stripe payment links (for re-sending or audit).
+- **`list_partner_stripe_transactions`** — list the partner's own Stripe transactions (test or live). Use it to confirm a **test** payment actually landed (pay a test link with card `4242 4242 4242 4242`, then check here) before going live, or to review real transactions later. Amounts are in **major units** (e.g. `50.00`), signed (+ in / − out). `client_reference_id` echoes whatever you appended to the link URL (`<link>?client_reference_id=...`) so you can match a transaction back to a specific customer/order. Optional `environment` (`test`/`live`, omit for both) and `limit`. Note: a freshly-paid test transaction can take up to ~a minute to appear.
 - **`create_partner_mercury_invoice`** — bill a customer through Mercury bank invoice (USD only, customer pays via ACH/wire). Best for B2B contracts.
 - **`create_partner_crypto_invoice`** — generate a Shkeeper invoice (USDT / USDC). Best when the customer prefers crypto or fiat is too slow.
 - **`create_partner_tbank_payment`** — generate a T-Bank payment for Russian customers (cards + СБП, RUB only). Best for B2C in RU.
@@ -78,7 +79,32 @@ If a partner asks "where do I see notifications?" — they arrive in their perso
 ### Test mode vs Live
 EasyPay использует флаг `is_test` на уровне партнёра / сессии. На тестовом партнёре платежи идут через Stripe test mode, выплаты не реальные. Если видите `is_test: true` в профиле — предупредите партнёра, что это sandbox.
 
+### Test → Live recipe (помоги партнёру убедиться до перехода на реальные платежи)
+
+Это **путь от теста к live**, а не сразу к продакшну. Цель — чтобы партнёр сам, через тебя, провёл сквозной тест и поверил в продукт ещё до подключения реальных продуктов.
+
+1. **Тестовые ссылки.** У партнёра уже есть автосозданные тестовые продукты/ссылки (см. `get_partner_onboarding_checklist` → `test_products`, либо demo-витрина `showcase_url`). Если нужно больше вариантов — `create_partner_stripe_product` с `is_test: true` (та же быстрая модерация). Реальные продукты создаются так же, но `is_test: false` — они идут на модерацию команды заботы.
+2. **Трассировка.** Отправляя тестовую (или будущую реальную) ссылку клиенту, добавь к URL `?client_reference_id=<твой-идентификатор>` (например `order-42`). Это значение вернётся в транзакции — так свяжешь оплату с конкретным заказом/клиентом.
+3. **Оплата тест-картой.** Открой ссылку и оплати тестовой картой Stripe: номер `4242 4242 4242 4242`, любой будущий срок (напр. `01/30`), любой CVC (напр. `111`), любой индекс. Деньги не списываются.
+4. **Поймай результат — двумя способами:**
+   - **Свой вебхук:** `register_partner_notifications_webhook` с `test_url` (можно http) — EasyPay будет слать события платежей на твой адрес. Так партнёр проверяет интеграцию на своей стороне.
+   - **Свои транзакции:** `list_partner_stripe_transactions` с `environment: "test"` — увидишь только что прошедшую оплату, сумму (в мажорных единицах), статус и `client_reference_id`, который ты задал в шаге 2.
+5. **Чеклист «перед live»** — пройдись по нему с партнёром:
+   - [ ] тестовый платёж картой 4242 прошёл;
+   - [ ] он виден в `list_partner_stripe_transactions` (или прилетел на твой тестовый вебхук);
+   - [ ] `client_reference_id` корректно отслеживается;
+   - [ ] баланс/нотификации работают как ожидаешь.
+6. **Переход на реальные продукты.** Когда партнёр убедился — он НЕ переключает прод сам. Скомпилируй, что он продаёт (описание + ссылки), и вызови `send_request_to_easypay_care_team` — это и откроет чат с командой заботы, и запустит подключение/модерацию реальных продуктов. Реальные продукты можно сразу отправлять на модерацию через `create_partner_stripe_product` (`is_test: false`) — но боевое подключение оформляет команда заботы.
+
 ## Common JTBD flows
+
+### J0 — Try EasyPay on test before going live (онбординг до первого реального платежа)
+Партнёр хочет убедиться, что всё работает, прежде чем подключать реальные продукты. Веди по **Test → Live recipe** (раздел выше):
+1. `get_partner_onboarding_checklist` — сориентируйся: что уже сделано и `next_recommended_action`.
+2. Дай тестовую ссылку (`test_products` из чеклиста или `create_partner_stripe_product` с `is_test: true`), добавь `?client_reference_id=...`.
+3. Партнёр платит картой `4242 4242 4242 4242`.
+4. Подтверди результат через `list_partner_stripe_transactions` (`environment: "test"`) и/или `register_partner_notifications_webhook` (`test_url`).
+5. Убедился → `send_request_to_easypay_care_team` со списком того, что продаёт → команда заботы подключит реальные продукты. Это путь тест → live, не сразу прод.
 
 ### J1 / J6 — Sell a one-time service to an international customer (USD/EUR)
 1. `verify_partner_credentials` → подтвердить что Stripe доступен.
@@ -135,4 +161,4 @@ EasyPay использует флаг `is_test` на уровне партнёр
 
 ## When in doubt
 
-Write to the care team. `send_request_to_easypay_care_team` — лучший выбор для всего, что выходит за рамки 16 операционных тулов. Не пытайтесь угадать или импровизировать с деньгами партнёра.
+Write to the care team. `send_request_to_easypay_care_team` — лучший выбор для всего, что выходит за рамки 17 операционных тулов. Не пытайтесь угадать или импровизировать с деньгами партнёра.
