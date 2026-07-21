@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.6.0
+version: 0.7.0
 ---
 
 # EasyPay payments skill
@@ -29,7 +29,10 @@ All tools live under the MCP server `easypay-payments-mcp`.
 - **`create_partner_stripe_product`** — create a one-time or subscription product in Stripe. Goes through `pending_moderation → approved → live`. Used for: cards, wallets, BNPL, recurring billing in USD/EUR. Pass `is_test: true` to create a test-mode product (real card not charged) for partner-side experimentation; `is_test: false` (default) creates a real-mode product. **Both go through the same care-team moderation** (typically ≤ 2 hours).
 - **`create_partner_stripe_payment_link`** — generate a payment link for an already-approved Stripe product (re-use the product, get a fresh short URL).
 - **`list_partner_live_stripe_payment_links`** — show currently active Stripe payment links (for re-sending or audit).
-- **`list_partner_stripe_transactions`** — list the partner's own Stripe transactions (test or live). Use it to confirm a **test** payment actually landed (pay a test link with card `4242 4242 4242 4242`, then check here) before going live, or to review real transactions later. Amounts are in **major units** (e.g. `50.00`), signed (+ in / − out). `client_reference_id` echoes whatever you appended to the link URL (`<link>?client_reference_id=...`) so you can match a transaction back to a specific customer/order. Optional `environment` (`test`/`live`, omit for both) and `limit`. Note: a freshly-paid test transaction can take up to ~a minute to appear.
+- **`list_partner_stripe_transactions`** — list the partner's own Stripe transactions (test or live), optionally over a date range. Use it to confirm a **test** payment actually landed (pay a test link with card `4242 4242 4242 4242`, then check here) before going live, or to review real transactions later. Amounts are in **major units** (e.g. `50.00`), signed (+ in / − out). Each row carries `payment_intent_id` (`pi_*`) — the primary payment id, pass it to `get_partner_stripe_payment` for the full snapshot — and `client_reference_id`, which echoes whatever you appended to the link URL (`<link>?client_reference_id=...`) so you can match a transaction back to a specific customer/order. Optional `environment` (`test`/`live`, omit for both), `limit`, `created_gte`/`created_lte` (inclusive ISO date `2026-07-01` — expands to the whole day UTC — or datetime). Note: a freshly-paid test transaction can take up to ~a minute to appear.
+- **`get_partner_stripe_payment`** — fetch ONE payment by its `payment_intent_id` (`pi_*`) with the **full object snapshot** captured at payment time (invoice, charge, checkout session, subscription, balance transaction — same payload class the partner webhook delivers) plus `related_movements` (refunds/disputes of that payment). Strictly one id per call — for bulk review use `list_partner_stripe_transactions` and drill down. Use for reconciliation questions like «покажи этот платёж целиком», «чем платил клиент», «был ли рефанд по этому платежу».
+- **`list_partner_stripe_subscriptions`** — light list of the partner's Stripe subscriptions, newest first: `subscription_id`, status (`active`/`trialing`/`canceled`/…), product name, recurring price (major units per interval), customer id, created date. Optional `created_gte`/`created_lte`, `status` (case-insensitive), `limit`. Use for «мои подписки за период», «сколько активных подписок».
+- **`get_partner_stripe_subscription`** — fetch ONE subscription by `sub_*` with the full object snapshot (subscription + product + checkout session). One id per call; get the id from `list_partner_stripe_subscriptions` or from a transaction's snapshot.
 - **`create_partner_mercury_invoice`** — bill a customer through Mercury bank invoice (USD only, customer pays via ACH/wire). Best for B2B contracts.
 - **`create_partner_crypto_invoice`** — generate a Shkeeper invoice (USDT / USDC). Best when the customer prefers crypto or fiat is too slow.
 - **`create_partner_tbank_payment`** — generate a T-Bank payment for Russian customers (cards + СБП, RUB only). Best for B2C in RU.
@@ -142,9 +145,14 @@ EasyPay использует флаг `is_test` на уровне партнёр
 2. `check_notifications_bot_in_group` — убедиться, что бот добавлен и имеет права писать (для форумов — `can_manage_topics`).
 
 ### J7 — Failed payment / dispute / refund
-1. У вас **нет** тулов для рефанда, dispute resolution, fraud investigation.
-2. Соберите контекст у партнёра (transaction id, customer email, что произошло).
-3. `send_request_to_easypay_care_team` со всем собранным контекстом.
+1. У вас **нет** тулов, чтобы СДЕЛАТЬ рефанд / dispute resolution / fraud investigation.
+2. Но собрать контекст можно самому: `list_partner_stripe_transactions` за период → найди платёж, возьми `payment_intent_id` → `get_partner_stripe_payment` покажет полный снэпшот и `related_movements` (уже случившиеся рефанды/диспуты этого платежа).
+3. `send_request_to_easypay_care_team` со всем собранным контекстом (payment_intent_id, сумма, клиент, что произошло).
+
+### J-recon — «Сверь мои платежи/подписки за период»
+1. `list_partner_stripe_transactions` с `created_gte`/`created_lte` (+ `environment` при необходимости) — перечень с `payment_intent_id` и `client_reference_id` для матчинга с внутренней системой партнёра.
+2. По спорным позициям — `get_partner_stripe_payment` (полный снэпшот, штучно).
+3. Подписки аналогично: `list_partner_stripe_subscriptions` за период → `get_partner_stripe_subscription` по конкретной.
 
 ## Anti-patterns: what NOT to do
 
@@ -161,4 +169,4 @@ EasyPay использует флаг `is_test` на уровне партнёр
 
 ## When in doubt
 
-Write to the care team. `send_request_to_easypay_care_team` — лучший выбор для всего, что выходит за рамки 17 операционных тулов. Не пытайтесь угадать или импровизировать с деньгами партнёра.
+Write to the care team. `send_request_to_easypay_care_team` — лучший выбор для всего, что выходит за рамки операционных тулов. Не пытайтесь угадать или импровизировать с деньгами партнёра.
