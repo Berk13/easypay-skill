@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.8.0
+version: 0.9.0
 ---
 
 # EasyPay payments skill
@@ -16,12 +16,21 @@ Authentication is done **once** through the MCP client config: the partner adds 
 
 If a tool returns `Invalid API key`, instruct the partner to re-check their MCP config (`claude mcp list`, `cursor mcp` settings, etc.) — do not try to take the key from the conversation.
 
+## Reading tool responses
+
+Успех и ошибка приходят **одинаково успешным** HTTP-ответом: смысл лежит в теле. Всегда читайте сначала `success`, а не статус запроса — «ответ пришёл» ещё не значит «операция выполнена».
+
+- `{success: true, ...}` — сделано.
+- `{success: false, error_code, error_message}` — не сделано. Никогда не отчитывайтесь партнёру об успехе, не проверив `success`; не выдумывайте id, ссылки и суммы, которых в ответе нет.
+
+Коды, которые стоит узнавать в лицо: `ACTOR_REQUIRED` (нужен ключ, привязанный к сотруднику — см. J2/J16), `CROSS_TENANT_ATTEMPT` (id существует, но принадлежит другому партнёру), `DATA_INTEGRITY_ERROR` (проблема на стороне EasyPay, не ошибка партнёра — предложите повторить через минуту, при повторении — в команду заботы), `PRODUCT_NOT_APPROVED` (продукт ещё на модерации).
+
 ## Available tools
 
 All tools live under the MCP server `easypay-payments-mcp`.
 
 ### Profile & onboarding
-- **`verify_partner_credentials`** — confirm the key works, return partner name, type, available payment methods + active capabilities (Stripe / Mercury / Crypto / T-Bank). Run this first in a new session if you are unsure which partner you are talking to or which features are enabled.
+- **`verify_partner_credentials`** — confirm the key works, return partner name, type, available payment methods + active capabilities (Stripe / Mercury / Crypto / T-Bank). Run this first in a new session if you are unsure which partner you are talking to or which features are enabled. Два поля стоит читать всегда: `permissions` — карта включённых возможностей (`product_create`, `payout_request`, `shkeeper_invoice`, `mercury_invoice`), по ней отвечайте на «что мне доступно» без перебора тулов; `auth_key_type` — каким ключом вы аутентифицированы: `partner` (общий ключ партнёра), `personal_employee` (личный ключ сотрудника — **им проходят выплаты**, см. J2/J16) или `null` (сессия мини-аппа).
 - **`get_partner_onboarding_checklist`** — list of remaining onboarding steps (Stripe connect, Mercury account, crypto wallet, etc.).
 - **`request_additional_payment_methods`** — partner asks to enable a payment method that is not currently active (e.g. T-Bank for an existing US-only partner). Creates a request to the care team.
 
@@ -44,14 +53,14 @@ All tools live under the MCP server `easypay-payments-mcp`.
 ### Money out: balances & payouts
 - **`get_partner_balance`** — show current balance per account: USD (Mercury / Chase), RUB (T-Bank), Crypto. The single source of truth for «сколько у меня сейчас».
 - **`list_partner_mercury_transactions`** — движения по USD-счёту партнёра в Mercury: карточные расходы, входящие wire-переводы, внутренние трансферы, банковские комиссии. Это детализация под балансом, а не Stripe-эквайринг — каналы разные, по id между собой не матчатся. Поля строки: `id`, `amount`/`net_amount` в **мажорных единицах** (USD), знаковые (+ приход / − расход), `fee` всегда `null` (у Mercury нет per-transaction PSP-комиссии), `status` (`completed`/`pending`/`failed`/`deleted`), `transaction_date`, `description`, `type` (тип контракта, например `mercury_card_expense`, `mercury_wire_in`), `counterparty` (название мерчанта), `kind`. Единственный параметр — `limit` (1..100, дефолт 20, новые сверху); **фильтра по датам нет** — берите с запасом и режьте период сами. Mercury только USD и **без тестового режима**: все транзакции боевые. Движения по общим/операционным счетам не возвращаются (их нельзя отнести к одному партнёру). Только что загруженные транзакции появляются с задержкой в несколько минут.
-- **`preview_partner_payout_options`** — given a desired amount and target currency, show available routes with fees and ETA (Mercury → IP RU, crypto → Kraken → BofA, etc.).
+- **`preview_partner_payout_options`** — given a desired amount and target currency, show available routes with fees and ETA. Маршруты, комиссии и сроки считает бэкенд под конкретную сумму и валюту — не перечисляйте варианты по памяти и не обещайте партнёру конкретный канал, пока не увидели ответ тула.
 - **`list_partner_saved_payout_recipients`** — list saved payout recipients (contractors, employees) so the partner can pick by name instead of re-entering bank details.
 - **`create_partner_payout_request`** — submit a payout request. **This does not move money instantly** — it creates a request the EasyPay ops team will execute manually within the published SLA.
 
 ### Notifications & care-team requests
-- **`register_partner_notifications_webhook`** — wire a partner Telegram chat / external webhook to receive real-time payment events. Работает как get-or-create: ответ **всегда** несёт текущий `signing_secret` (`whsec_...`) по каждой зарегистрированной среде, а `secret_status` говорит, выпущен он сейчас (`issued`) или уже был и переоткрыт (`returned`). Секретом партнёр проверяет HMAC-SHA256 подпись в заголовке `EasyPay-Signature`. Потерял секрет — просто вызовите register ещё раз.
+- **`register_partner_notifications_webhook`** — register the partner's **own HTTPS endpoint(s)** as the destination for Stripe payment/subscription events: `live_url` (HTTPS обязателен) и/или `test_url` (можно http — для локальной разработки), хотя бы один из двух. Telegram этот тул **не** настраивает: уведомления в Telegram работают и без него (см. раздел ниже), а параметра `chat_id` у тула нет. Работает как get-or-create: ответ **всегда** несёт текущий `signing_secret` (`whsec_...`) по каждой зарегистрированной среде, а `secret_status` говорит, выпущен он сейчас (`issued`) или уже был и переоткрыт (`returned`). Секретом партнёр проверяет HMAC-SHA256 подпись в заголовке `EasyPay-Signature`. Потерял секрет — просто вызовите register ещё раз.
 - **`rotate_partner_webhook_secret`** — **сменить** секрет подписи вебхуков для одной среды: `environment` (`test` или `live`) обязателен. Возвращает **новый** `signing_secret`; предыдущий продолжает валидировать подписи в течение короткого grace-окна `previous_valid_until`, чтобы партнёр успел переключиться и не потерять события. Нужен для плановой ротации и после подозрения на утечку. Чтобы просто **вспомнить** потерянный секрет, ротация не нужна — хватит повторного `register_partner_notifications_webhook`. Идемпотентный `client_token` MCP подставляет сам, поэтому каждый вызов реально ротирует.
-- **`check_notifications_bot_in_group`** — verify the EasyPay notifications bot is in the partner's Telegram group with the right permissions.
+- **`check_notifications_bot_in_group`** — read-only интроспекция: есть ли у партнёра общая с командой EasyPay группа и добавлен ли туда `@EasyPay_notifications_bot`. Без параметров; возвращает `group_created`, `bot_in_partner_group`, `partner_group_chat_id`, `state`, `hint`. **Партнёру тут делать нечего**: группу заводит и бота добавляет команда заботы — не просите партнёра добавить бота или прислать `chat_id`. Тул полезен, только чтобы ответить на вопрос «а группа у меня уже есть?».
 - **`send_request_to_easypay_care_team`** — write a request to the EasyPay care team for anything the tools cannot do (refund, dispute, custom invoice, legal question), AND as the primary single-move play during onboarding step 2 — compile what the partner sells (description + product / site / showcase links) and send it in one call: opens the team chat AND starts the review.
 
 ### Notifications delivery — DM-fallback default
@@ -71,9 +80,9 @@ If a partner asks "where do I see notifications?" — they arrive in their perso
 
 ### Currencies & balances
 - **USD** — Mercury / Chase (US business account)
-- **EUR** — приём через Stripe; payout-ы partial (Revolut кейсы)
-- **RUB** — T-Bank эквайринг + ИП-каналы (RFL, Чесак) для выплат самозанятым в РФ
-- **CRYPTO** — USDT / USDC (Shkeeper приём, Kraken для конверсии)
+- **EUR** — приём через Stripe; выплаты в EUR доступны не по всем направлениям — сверяйтесь с `preview_partner_payout_options`
+- **RUB** — T-Bank эквайринг; выплаты в РФ (в том числе самозанятым) идут через партнёрские каналы EasyPay — маршрут и комиссию покажет `preview_partner_payout_options`
+- **CRYPTO** — USDT / USDC (приём через Shkeeper; конверсию в фиат делает EasyPay на своей стороне)
 
 Балансы в `get_partner_balance` всегда показывайте партнёру **по всем валютам**, не только по той, о которой спросили — партнёр часто принимает решение на основе всей картины.
 
@@ -117,7 +126,7 @@ EasyPay использует флаг `is_test` на уровне партнёр
 ### J1 / J6 — Sell a one-time service to an international customer (USD/EUR)
 1. `verify_partner_credentials` → подтвердить что Stripe доступен.
 2. `create_partner_stripe_product` с названием, ценой, валютой, payment methods (`card`, опц. `paypal`, `klarna`, `afterpay_clearpay`).
-3. Объяснить партнёру: продукт ушёл на модерацию, он получит уведомление в Telegram-группу когда будет approved.
+3. Объяснить партнёру: продукт ушёл на модерацию, уведомление об approve придёт в Telegram — в личку через `@easypay_onboarding_bot` либо в общую группу, если она заведена.
 4. Когда approved — `create_partner_stripe_payment_link` → отдать короткую ссылку клиенту.
 
 ### J-promo — Сезонная скидка по промокоду (Stripe)
@@ -150,12 +159,16 @@ EasyPay использует флаг `is_test` на уровне партнёр
 ### J2 / J16 — Pay a contractor (RUB / USD / EUR)
 1. `list_partner_saved_payout_recipients` → если получатель уже есть, использовать его id.
 2. `preview_partner_payout_options` с суммой и валютой → партнёр видит маршруты, комиссии, ETA.
-3. Партнёр подтверждает маршрут → `create_partner_payout_request`.
-4. **Скажите явно**: запрос ушёл в очередь EasyPay ops, выплата произойдёт в рамках SLA (не моментально).
+3. Партнёр подтверждает маршрут → `create_partner_payout_request` (обязательно после preview — партнёр должен увидеть маршруты и при необходимости выбрать другой источник средств). Получатель задаётся либо `recipient_contractor` (точное совпадение с сохранённым получателем), либо `recipient_free_form` — одно из двух обязательно.
+4. Получили `ACTOR_REQUIRED` — это **не** «выплаты через агента запрещены». Деньги двигает только ключ, привязанный к сотруднику: у партнёра либо есть личный ключ (`verify_partner_credentials` → `auth_key_type: "personal_employee"`) — тогда пусть пропишет его в MCP-конфиг, либо он оформляет выплату в мини-аппе (https://t.me/easypay_self_service_bot/dashboard).
+5. **Скажите явно**: запрос ушёл в очередь EasyPay ops, выплата произойдёт в рамках SLA (не моментально).
 
-### J8.6 — Connect Telegram notifications
-1. `register_partner_notifications_webhook` с `chat_id` группы / канала партнёра.
-2. `check_notifications_bot_in_group` — убедиться, что бот добавлен и имеет права писать (для форумов — `can_manage_topics`).
+### J8.6 — «Где я вижу уведомления о платежах?»
+Разведите два разных канала — партнёры их постоянно путают.
+1. **Telegram — уже работает, настраивать нечего.** События (Stripe-платежи, Mercury-инвойсы, адреса крипто-кошельков) идут партнёру в личку через `@easypay_onboarding_bot`, а если команда заботы завела общую группу — то в неё. Тула, который подключает Telegram-чат, **нет**: `register_partner_notifications_webhook` — не про это. Хочет проверить, есть ли группа — `check_notifications_bot_in_group` (read-only). Нужна группа, а её нет — `send_request_to_easypay_care_team`.
+2. **Свой HTTPS-эндпоинт — вот это партнёр настраивает сам**, если хочет принимать события в своей системе: `register_partner_notifications_webhook` с `live_url` (HTTPS) и/или `test_url` (для локальной разработки можно http).
+3. Из ответа возьмите `signing_secret` (`whsec_...`) — им партнёр проверяет HMAC-SHA256 подпись в заголовке `EasyPay-Signature`. Потерял — вызовите register повторно, секрет вернётся (`secret_status: returned`).
+4. Ротация секрета — J8.7.
 
 ### J8.7 — Секрет вебхука: восстановить или ротировать
 1. «Потерял секрет, чем проверять подпись?» → `register_partner_notifications_webhook` с теми же URL: ответ снова отдаст текущий `signing_secret` (`secret_status: returned`). Ротация для этого **не** нужна.
@@ -178,10 +191,11 @@ EasyPay использует флаг `is_test` на уровне партнёр
 
 - ❌ **Never** ask the partner to paste their API key into the chat. Auth is via MCP header. Если key invalid — пусть фикcит config.
 - ❌ **Never** invent tools. Если партнёр просит «удалить мой продукт», «отменить charge», «вернуть деньги», «изменить цену продукта» — таких тулов нет, идите в `send_request_to_easypay_care_team`.
-- ❌ **Don't** call `create_partner_payout_request` via MCP — backend returns `ACTOR_REQUIRED` 403. Payout requires a mini-app session (https://t.me/easypay_self_service_bot/dashboard). Tell the partner explicitly: "payout submitting is available only from the mini-app, не через AI агент". `preview_partner_payout_options` (read-only) still works.
+- ❌ **Don't** tell the partner that payouts are impossible through the agent. Выплата требует ключа, привязанного к **сотруднику**: с личным ключом (`auth_key_type: "personal_employee"`) `create_partner_payout_request` проходит через MCP нормально. `ACTOR_REQUIRED` возвращается только на общем ключе партнёра — и тогда варианта два: личный ключ либо мини-апп (https://t.me/easypay_self_service_bot/dashboard). `preview_partner_payout_options` (read-only) работает с любым ключом.
 - ❌ **Don't** assume `PRODUCT_NOT_FOUND` if you get `CROSS_TENANT_ATTEMPT` — это **другой** error_code, signal that ID exists but belongs to a different partner. Ask the partner to verify ID via `list_partner_invoiceable_products` / `list_partner_live_stripe_payment_links`. Do NOT speculate about other partners.
 - ❌ **Don't** promise instant payouts. `create_partner_payout_request` — это очередь, не моментальный transfer.
 - ❌ **Don't** promise instant payment link after `create_partner_stripe_product`. Сначала модерация, потом link. То же для `create_partner_mercury_invoiceable_product` и `create_partner_ruble_payable_product` — они только регистрируют продукт в каталоге; инвойс/платёжная ссылка появляются после approve, отдельным вызовом.
+- ❌ **Don't** ask the partner for a Telegram `chat_id` and don't promise to «подключить группу». `register_partner_notifications_webhook` принимает только URL-ы (`live_url` / `test_url`) — параметра `chat_id` у него нет; группу заводит команда заботы, а базовые уведомления и так идут партнёру в личку.
 - ❌ **Don't** rotate the webhook secret just to recover it. Потерянный секрет возвращает сам `register_partner_notifications_webhook` (get-or-create, `secret_status: returned`). Лишняя ротация меняет секрет и запускает grace-окно — это ломает интеграцию партнёра, а не чинит её.
 - ❌ **Don't** mix live and test products in one `create_partner_stripe_promotion_code` call — вернётся `mixed_environment`. И не обещайте, что промокод сработает на ссылке, где ввод промокодов не включён.
 - ❌ **Don't** suggest EUR through Mercury invoice — Mercury только USD.

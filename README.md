@@ -110,15 +110,17 @@ Example prompts (Stripe products, crypto/bank invoices, payouts, balance), alter
 
 For products and invoices that need EasyPay moderation, you'll get a notification in your DM via `@easypay_onboarding_bot` once the link or invoice is live.
 
-## Identity controls (v0.4 backend, 2026-05-25)
+## Identity controls
 
-Money-moving operations (`create_partner_payout_request`) require a mini-app session — your AI agent will receive `ACTOR_REQUIRED` 403 instead of executing the payout. Open the EasyPay mini-app to submit payouts: [https://t.me/easypay_self_service_bot/dashboard](https://t.me/easypay_self_service_bot/dashboard). Read-only preview (`preview_partner_payout_options`) still works through the agent.
+Every call returns a successful HTTP response — the outcome is in the body. `{"success": true, ...}` means done; `{"success": false, "error_code": ..., "error_message": ...}` means it didn't happen. Three codes are worth knowing:
 
-If your agent references a `stripe_product_id` / `payment_link_id` / `recipient_id` that doesn't belong to your account, you'll get `CROSS_TENANT_ATTEMPT` 403 (not a generic "not found"). Use `list_partner_invoiceable_products` / `list_partner_live_stripe_payment_links` to discover your own IDs.
+**`ACTOR_REQUIRED`** — money-moving operations (`create_partner_payout_request`) need an API key bound to a specific employee. A **personal** employee key submits payouts through the agent just fine; a **partner-wide** key doesn't. If you only have a partner-wide key, submit the payout from the EasyPay mini-app instead: [https://t.me/easypay_self_service_bot/dashboard](https://t.me/easypay_self_service_bot/dashboard). Read-only preview (`preview_partner_payout_options`) works with either key. `verify_partner_credentials` tells you which kind you're using (`auth_key_type`).
 
-`DATA_INTEGRITY_ERROR` 500 — a server-side issue on EasyPay; care team gets paged automatically, just retry after a moment.
+**`CROSS_TENANT_ATTEMPT`** — the `stripe_product_id` / `payment_link_id` / `recipient_id` your agent referenced exists but belongs to a different account (deliberately not a generic "not found"). Use `list_partner_invoiceable_products` / `list_partner_live_stripe_payment_links` to discover your own IDs.
 
-All 39 active partners + 58 employees already received the new permission codes (`balance_view` / `recipients_view` / `products_view` / `support_contact` / `webhook_config` / `payment_method_request` / `session_mint`) — your existing API key keeps working.
+**`DATA_INTEGRITY_ERROR`** — a server-side issue on EasyPay, not your mistake; the care team gets paged automatically, just retry after a moment.
+
+Permission gating is enforced per endpoint — `verify_partner_credentials` returns your `permissions` array, so you can ask the agent "what's enabled for me?" instead of discovering it by trial and error.
 
 ---
 
@@ -131,7 +133,15 @@ All 39 active partners + 58 employees already received the new permission codes 
 
 ## Status
 
-**v0.5.0** — Streamable HTTP transport at `/mcp/` (MCP spec 2025-03-26) in stateless mode. Legacy SSE endpoint at `/sse` keeps working for existing installations but is no longer documented for new installs; switch to `/mcp/` at your convenience. Backend openapi v0.4.0 (P0 fintech baseline 2026-05-25): payout requires mini-app session, cross-tenant ID misuse returns `CROSS_TENANT_ATTEMPT` 403 (see "Identity controls" above). Agentic-primary install (paste one prompt, agent runs it) + manual fallback per CLI. Skill downloaded into project (`.claude/skills/easypay/` for Claude Code, `.agents/skills/easypay/` for Codex & Gemini, project-local for Cursor — see Customer Guide). README is the install quickstart; [Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) is the source of truth for examples, alternative paths, and troubleshooting.
+**Skill v0.9.0** (2026-07-24) — the skill is back in sync with the live server, in two ways.
+
+*Catalog:* **26 tools**, matching `tools/list` exactly. Five were missing and are now documented — `create_partner_stripe_promotion_code`, `create_partner_mercury_invoiceable_product`, `create_partner_ruble_payable_product`, `list_partner_mercury_transactions`, `rotate_partner_webhook_secret` — along with flows for promo codes and webhook-secret rotation.
+
+*Corrections:* payouts are **not** mini-app-only — a personal employee API key submits them through the agent (see "Identity controls"); `register_partner_notifications_webhook` registers your own HTTPS endpoints and never took a Telegram `chat_id`; and every tool answers with a successful HTTP response, so the agent must read `success` in the body rather than trust the status code. Backend openapi v0.7.0.
+
+Transport: Streamable HTTP at `/mcp/` in stateless mode. The legacy SSE endpoint at `/sse` keeps working for existing installations but is no longer documented for new installs; switch to `/mcp/` at your convenience.
+
+Install is agentic-primary (paste one prompt, the agent runs it) with a manual fallback per CLI. The skill is downloaded into your project (`.claude/skills/easypay/` for Claude Code, `.agents/skills/easypay/` for Codex & Gemini, project-local for Cursor — see Customer Guide). README is the install quickstart; the [Customer Guide](https://docs.thenextgen.store/s/228aae3c-2e06-4b22-9982-8508a08d9d04) is the source of truth for examples, alternative paths, and troubleshooting.
 
 Not yet:
 - CI markdown linter
