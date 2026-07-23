@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.7.0
+version: 0.7.1
 ---
 
 # EasyPay payments skill
@@ -35,7 +35,7 @@ All tools live under the MCP server `easypay-payments-mcp`.
 - **`get_partner_stripe_subscription`** — fetch ONE subscription by `sub_*` with the full object snapshot (subscription + product + checkout session). One id per call; get the id from `list_partner_stripe_subscriptions` or from a transaction's snapshot.
 - **`create_partner_mercury_invoice`** — bill a customer through Mercury bank invoice (USD only, customer pays via ACH/wire). Best for B2B contracts.
 - **`create_partner_crypto_invoice`** — generate a Shkeeper invoice (USDT / USDC). Best when the customer prefers crypto or fiat is too slow.
-- **`create_partner_tbank_payment`** — generate a T-Bank payment for Russian customers (cards + СБП, RUB only). Best for B2C in RU.
+- **`create_partner_tbank_payment`** — generate a T-Bank payment for Russian customers (cards + СБП, RUB only). Best for B2C in RU. Возвращает **две** ссылки: `payment_url` — страница оплаты T-Bank (карта или выбор СБП) — и `sbp_url` — прямая СБП-ссылка `qr.nspk.ru`, которую клиент открывает сразу в приложении своего банка. **По умолчанию отдавайте клиенту `sbp_url`**: СБП-эквайринг обходится партнёру заметно дешевле карточного, а клиент не заполняет карточную форму. `sbp_url` best-effort — приходит `null`, если СБП-QR не выпустился или это повтор платёжной сессии, созданной до 2026-07-23; тогда отдавайте `payment_url`. Обе ссылки дублируются в Telegram-чат партнёра.
 - **`list_partner_invoiceable_products`** — list products that can be re-invoiced (saves the partner from re-creating the same product twice).
 
 ### Money out: payouts
@@ -124,7 +124,8 @@ EasyPay использует флаг `is_test` на уровне партнёр
 ### J1.3 — Accept payment from a Russian B2C customer (RUB)
 1. `list_partner_invoiceable_products({currency:'RUB'})` → найти RUB-продукт и его `product_id`. Если продукта нет — `create_partner_ruble_payable_product`, дождаться approve.
 2. `create_partner_tbank_payment` с `product_id` + `customer_email` ИЛИ `customer_phone` (+ опц. `unit_amount_override` в рублях).
-3. Если у партнёра не подключён T-Bank — `request_additional_payment_methods` со словом `russia`.
+3. Отдайте клиенту `sbp_url` (СБП, `qr.nspk.ru`) — это дешевле для партнёра по эквайрингу; `payment_url` держите как запасной вариант и для тех, кто хочет платить картой. Если `sbp_url` пришёл `null` — отдавайте только `payment_url`. Обе ссылки партнёр увидит и у себя в Telegram-чате.
+4. Если у партнёра не подключён T-Bank — `request_additional_payment_methods` со словом `russia`.
 
 ### J1 (alt) — Customer prefers crypto
 1. `create_partner_crypto_invoice` с `amount_usd`, `customer_email` (+ опц. `cryptos: ['USDT','USDC']`).
