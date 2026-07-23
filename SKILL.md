@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.7.1
+version: 0.8.0
 ---
 
 # EasyPay payments skill
@@ -28,24 +28,29 @@ All tools live under the MCP server `easypay-payments-mcp`.
 ### Money in: products & payment links
 - **`create_partner_stripe_product`** — create a one-time or subscription product in Stripe. Goes through `pending_moderation → approved → live`. Used for: cards, wallets, BNPL, recurring billing in USD/EUR. Pass `is_test: true` to create a test-mode product (real card not charged) for partner-side experimentation; `is_test: false` (default) creates a real-mode product. **Both go through the same care-team moderation** (typically ≤ 2 hours).
 - **`create_partner_stripe_payment_link`** — generate a payment link for an already-approved Stripe product (re-use the product, get a fresh short URL).
+- **`create_partner_stripe_promotion_code`** — create one customer-facing percent-off code (например `BLACKFRIDAY`) и привязать его к 1..50 уже одобренным Stripe-продуктам партнёра. Обязательно: `stripe_product_ids` (`prod_*`), `code` (3–50 символов `A-Za-z0-9_-`, на чекауте матчится без учёта регистра, уникален в рамках партнёра), `percent_off` (1–100). Опционально: `duration` — `once` (дефолт, скидка на один платёж) / `forever` (на каждый цикл подписки) / `repeating` (+ обязательный `duration_in_months`), `max_redemptions` (общий лимит списаний), `expires_at` (Unix-секунды, только в будущем). Все продукты должны быть **одной среды** — все live или все test, смешали → `mixed_environment`; занятый код → `code_already_exists` (возьмите более уникальный, с префиксом бренда). **Код сработает только на ссылке, где включён ввод промокодов** (`allow_promo_codes: true` в `create_partner_stripe_product` либо `allow_promotion_codes: true` в `create_partner_stripe_payment_link`) — по умолчанию поля промокода на чекауте нет.
 - **`list_partner_live_stripe_payment_links`** — show currently active Stripe payment links (for re-sending or audit).
 - **`list_partner_stripe_transactions`** — list the partner's own Stripe transactions (test or live), optionally over a date range. Use it to confirm a **test** payment actually landed (pay a test link with card `4242 4242 4242 4242`, then check here) before going live, or to review real transactions later. Amounts are in **major units** (e.g. `50.00`), signed (+ in / − out). Each row carries `payment_intent_id` (`pi_*`) — the primary payment id, pass it to `get_partner_stripe_payment` for the full snapshot — and `client_reference_id`, which echoes whatever you appended to the link URL (`<link>?client_reference_id=...`) so you can match a transaction back to a specific customer/order. Optional `environment` (`test`/`live`, omit for both), `limit`, `created_gte`/`created_lte` (inclusive ISO date `2026-07-01` — expands to the whole day UTC — or datetime). Note: a freshly-paid test transaction can take up to ~a minute to appear.
 - **`get_partner_stripe_payment`** — fetch ONE payment by its `payment_intent_id` (`pi_*`) with the **full object snapshot** captured at payment time (invoice, charge, checkout session, subscription, balance transaction — same payload class the partner webhook delivers) plus `related_movements` (refunds/disputes of that payment). Strictly one id per call — for bulk review use `list_partner_stripe_transactions` and drill down. Use for reconciliation questions like «покажи этот платёж целиком», «чем платил клиент», «был ли рефанд по этому платежу».
 - **`list_partner_stripe_subscriptions`** — light list of the partner's Stripe subscriptions, newest first: `subscription_id`, status (`active`/`trialing`/`canceled`/…), product name, recurring price (major units per interval), customer id, created date. Optional `created_gte`/`created_lte`, `status` (case-insensitive), `limit`. Use for «мои подписки за период», «сколько активных подписок».
 - **`get_partner_stripe_subscription`** — fetch ONE subscription by `sub_*` with the full object snapshot (subscription + product + checkout session). One id per call; get the id from `list_partner_stripe_subscriptions` or from a transaction's snapshot.
 - **`create_partner_mercury_invoice`** — bill a customer through Mercury bank invoice (USD only, customer pays via ACH/wire). Best for B2B contracts.
+- **`create_partner_mercury_invoiceable_product`** — submit a new **real** (non-test) USD product for moderation, чтобы по нему можно было выставлять Mercury-инвойсы. Обязательно: `product_name`, `price_usd` (целые доллары без центов — дробные и строки отклоняются); `description` настоятельно рекомендуется — клиент видит его в инвойсе. Тул только **регистрирует продукт в каталоге**, платёжного документа сразу не появляется: после approve (обычно ≤ 2 рабочих часов) продукт виден в `list_partner_invoiceable_products({currency:'USD'})`, и только тогда идёт `create_partner_mercury_invoice`. Mercury — опциональная возможность: сначала `verify_partner_credentials` и проверьте `mercury_invoice` в `partner.permissions`; нет permission → не вызывайте тул, а предложите `request_additional_payment_methods` с `bank`.
 - **`create_partner_crypto_invoice`** — generate a Shkeeper invoice (USDT / USDC). Best when the customer prefers crypto or fiat is too slow.
 - **`create_partner_tbank_payment`** — generate a T-Bank payment for Russian customers (cards + СБП, RUB only). Best for B2C in RU. Возвращает **две** ссылки: `payment_url` — страница оплаты T-Bank (карта или выбор СБП) — и `sbp_url` — прямая СБП-ссылка `qr.nspk.ru`, которую клиент открывает сразу в приложении своего банка. **По умолчанию отдавайте клиенту `sbp_url`**: СБП-эквайринг обходится партнёру заметно дешевле карточного, а клиент не заполняет карточную форму. `sbp_url` best-effort — приходит `null`, если СБП-QR не выпустился или это повтор платёжной сессии, созданной до 2026-07-23; тогда отдавайте `payment_url`. Обе ссылки дублируются в Telegram-чат партнёра.
+- **`create_partner_ruble_payable_product`** — submit a new **real** (non-test) RUB product for moderation, чтобы по нему можно было выставлять T-Bank оплаты. Обязательно: `product_name`, `price_rub` (целые рубли без копеек); `description` рекомендуется — клиент видит его на чекауте T-Bank. Как и в Mercury-варианте, это только **регистрация продукта в каталоге**: ссылки на оплату тул не даёт. После approve берите `product_id` из `list_partner_invoiceable_products({currency:'RUB'})` и вызывайте `create_partner_tbank_payment`. Требует permission `tbank_payment` — если его нет, сначала `request_additional_payment_methods` со словом `russia`.
 - **`list_partner_invoiceable_products`** — list products that can be re-invoiced (saves the partner from re-creating the same product twice).
 
-### Money out: payouts
+### Money out: balances & payouts
 - **`get_partner_balance`** — show current balance per account: USD (Mercury / Chase), RUB (T-Bank), Crypto. The single source of truth for «сколько у меня сейчас».
+- **`list_partner_mercury_transactions`** — движения по USD-счёту партнёра в Mercury: карточные расходы, входящие wire-переводы, внутренние трансферы, банковские комиссии. Это детализация под балансом, а не Stripe-эквайринг — каналы разные, по id между собой не матчатся. Поля строки: `id`, `amount`/`net_amount` в **мажорных единицах** (USD), знаковые (+ приход / − расход), `fee` всегда `null` (у Mercury нет per-transaction PSP-комиссии), `status` (`completed`/`pending`/`failed`/`deleted`), `transaction_date`, `description`, `type` (тип контракта, например `mercury_card_expense`, `mercury_wire_in`), `counterparty` (название мерчанта), `kind`. Единственный параметр — `limit` (1..100, дефолт 20, новые сверху); **фильтра по датам нет** — берите с запасом и режьте период сами. Mercury только USD и **без тестового режима**: все транзакции боевые. Движения по общим/операционным счетам не возвращаются (их нельзя отнести к одному партнёру). Только что загруженные транзакции появляются с задержкой в несколько минут.
 - **`preview_partner_payout_options`** — given a desired amount and target currency, show available routes with fees and ETA (Mercury → IP RU, crypto → Kraken → BofA, etc.).
 - **`list_partner_saved_payout_recipients`** — list saved payout recipients (contractors, employees) so the partner can pick by name instead of re-entering bank details.
 - **`create_partner_payout_request`** — submit a payout request. **This does not move money instantly** — it creates a request the EasyPay ops team will execute manually within the published SLA.
 
 ### Notifications & care-team requests
-- **`register_partner_notifications_webhook`** — wire a partner Telegram chat / external webhook to receive real-time payment events.
+- **`register_partner_notifications_webhook`** — wire a partner Telegram chat / external webhook to receive real-time payment events. Работает как get-or-create: ответ **всегда** несёт текущий `signing_secret` (`whsec_...`) по каждой зарегистрированной среде, а `secret_status` говорит, выпущен он сейчас (`issued`) или уже был и переоткрыт (`returned`). Секретом партнёр проверяет HMAC-SHA256 подпись в заголовке `EasyPay-Signature`. Потерял секрет — просто вызовите register ещё раз.
+- **`rotate_partner_webhook_secret`** — **сменить** секрет подписи вебхуков для одной среды: `environment` (`test` или `live`) обязателен. Возвращает **новый** `signing_secret`; предыдущий продолжает валидировать подписи в течение короткого grace-окна `previous_valid_until`, чтобы партнёр успел переключиться и не потерять события. Нужен для плановой ротации и после подозрения на утечку. Чтобы просто **вспомнить** потерянный секрет, ротация не нужна — хватит повторного `register_partner_notifications_webhook`. Идемпотентный `client_token` MCP подставляет сам, поэтому каждый вызов реально ротирует.
 - **`check_notifications_bot_in_group`** — verify the EasyPay notifications bot is in the partner's Telegram group with the right permissions.
 - **`send_request_to_easypay_care_team`** — write a request to the EasyPay care team for anything the tools cannot do (refund, dispute, custom invoice, legal question), AND as the primary single-move play during onboarding step 2 — compile what the partner sells (description + product / site / showcase links) and send it in one call: opens the team chat AND starts the review.
 
@@ -115,6 +120,13 @@ EasyPay использует флаг `is_test` на уровне партнёр
 3. Объяснить партнёру: продукт ушёл на модерацию, он получит уведомление в Telegram-группу когда будет approved.
 4. Когда approved — `create_partner_stripe_payment_link` → отдать короткую ссылку клиенту.
 
+### J-promo — Сезонная скидка по промокоду (Stripe)
+Партнёр хочет дать клиентам код на скидку («−20% по BLACKFRIDAY на Pro и Pro Annual»).
+1. `list_partner_live_stripe_payment_links` → возьмите `prod_*` тех продуктов, на которые даётся скидка. Убедитесь, что они **все одной среды** (все live или все test) — иначе тул вернёт `mixed_environment`.
+2. Проверьте, что на ссылке вообще есть поле промокода. По умолчанию его нет: новые продукты создавайте с `allow_promo_codes: true`, для уже существующих сделайте дополнительную ссылку через `create_partner_stripe_payment_link` с `allow_promotion_codes: true`. Пропустите этот шаг — партнёр придёт с «код не работает», хотя код создан корректно.
+3. `create_partner_stripe_promotion_code`: `stripe_product_ids`, `code` (лучше с префиксом бренда — коды уникальны в рамках партнёра), `percent_off`, при необходимости `duration`/`duration_in_months`, `max_redemptions`, `expires_at`.
+4. Отдайте партнёру текст кода **и** ту ссылку, на которой он действует. Погасить, отредактировать или отключить промокод тулами нельзя — только `send_request_to_easypay_care_team`. Поэтому ограничения (`max_redemptions`, `expires_at`) закладывайте сразу.
+
 ### J1.4 — Bill an existing US/EU client by invoice (USD)
 1. `list_partner_invoiceable_products({currency:'USD'})` → найти продукт, взять его `product_id`.
 2. Если нужного продукта нет — `create_partner_mercury_invoiceable_product` (USD), дождаться approve, затем повторить шаг 1.
@@ -145,6 +157,12 @@ EasyPay использует флаг `is_test` на уровне партнёр
 1. `register_partner_notifications_webhook` с `chat_id` группы / канала партнёра.
 2. `check_notifications_bot_in_group` — убедиться, что бот добавлен и имеет права писать (для форумов — `can_manage_topics`).
 
+### J8.7 — Секрет вебхука: восстановить или ротировать
+1. «Потерял секрет, чем проверять подпись?» → `register_partner_notifications_webhook` с теми же URL: ответ снова отдаст текущий `signing_secret` (`secret_status: returned`). Ротация для этого **не** нужна.
+2. Плановая ротация или подозрение на утечку → `rotate_partner_webhook_secret` с `environment: "live"` (или `"test"`).
+3. Сразу проговорите grace-окно: старый секрет валиден до `previous_valid_until`. За это время партнёр должен выкатить новый секрет у себя — иначе после окна проверка подписи на его стороне начнёт падать.
+4. Среды независимы: ротация `test` не трогает `live`, и наоборот.
+
 ### J7 — Failed payment / dispute / refund
 1. У вас **нет** тулов, чтобы СДЕЛАТЬ рефанд / dispute resolution / fraud investigation.
 2. Но собрать контекст можно самому: `list_partner_stripe_transactions` за период → найди платёж, возьми `payment_intent_id` → `get_partner_stripe_payment` покажет полный снэпшот и `related_movements` (уже случившиеся рефанды/диспуты этого платежа).
@@ -154,6 +172,7 @@ EasyPay использует флаг `is_test` на уровне партнёр
 1. `list_partner_stripe_transactions` с `created_gte`/`created_lte` (+ `environment` при необходимости) — перечень с `payment_intent_id` и `client_reference_id` для матчинга с внутренней системой партнёра.
 2. По спорным позициям — `get_partner_stripe_payment` (полный снэпшот, штучно).
 3. Подписки аналогично: `list_partner_stripe_subscriptions` за период → `get_partner_stripe_subscription` по конкретной.
+4. По USD-счёту в Mercury (входящие wire, карточные расходы, банковские комиссии) — `list_partner_mercury_transactions`. Учтите: фильтра по датам там нет, берите `limit` до 100 и режьте период по `transaction_date` сами; тестового режима у Mercury нет — данные всегда боевые. Со Stripe-транзакциями по id не сходится: это разные каналы, сверять надо суммами и датами.
 
 ## Anti-patterns: what NOT to do
 
@@ -162,7 +181,9 @@ EasyPay использует флаг `is_test` на уровне партнёр
 - ❌ **Don't** call `create_partner_payout_request` via MCP — backend returns `ACTOR_REQUIRED` 403. Payout requires a mini-app session (https://t.me/easypay_self_service_bot/dashboard). Tell the partner explicitly: "payout submitting is available only from the mini-app, не через AI агент". `preview_partner_payout_options` (read-only) still works.
 - ❌ **Don't** assume `PRODUCT_NOT_FOUND` if you get `CROSS_TENANT_ATTEMPT` — это **другой** error_code, signal that ID exists but belongs to a different partner. Ask the partner to verify ID via `list_partner_invoiceable_products` / `list_partner_live_stripe_payment_links`. Do NOT speculate about other partners.
 - ❌ **Don't** promise instant payouts. `create_partner_payout_request` — это очередь, не моментальный transfer.
-- ❌ **Don't** promise instant payment link after `create_partner_stripe_product`. Сначала модерация, потом link.
+- ❌ **Don't** promise instant payment link after `create_partner_stripe_product`. Сначала модерация, потом link. То же для `create_partner_mercury_invoiceable_product` и `create_partner_ruble_payable_product` — они только регистрируют продукт в каталоге; инвойс/платёжная ссылка появляются после approve, отдельным вызовом.
+- ❌ **Don't** rotate the webhook secret just to recover it. Потерянный секрет возвращает сам `register_partner_notifications_webhook` (get-or-create, `secret_status: returned`). Лишняя ротация меняет секрет и запускает grace-окно — это ломает интеграцию партнёра, а не чинит её.
+- ❌ **Don't** mix live and test products in one `create_partner_stripe_promotion_code` call — вернётся `mixed_environment`. И не обещайте, что промокод сработает на ссылке, где ввод промокодов не включён.
 - ❌ **Don't** suggest EUR through Mercury invoice — Mercury только USD.
 - ❌ **Don't** send T-Bank link зарубежному клиенту — это RUB-только канал для российских карт + СБП.
 - ❌ **Don't** answer financial / tax / legal questions from your own knowledge. На вопросы про НДС, налоги, юрлица, договоры — escalate.
