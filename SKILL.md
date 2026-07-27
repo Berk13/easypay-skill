@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.9.0
+version: 0.9.1
 ---
 
 # EasyPay payments skill
@@ -49,6 +49,7 @@ All tools live under the MCP server `easypay-payments-mcp`.
 - **`create_partner_tbank_payment`** — generate a T-Bank payment for Russian customers (cards + СБП, RUB only). Best for B2C in RU. Возвращает **две** ссылки: `payment_url` — страница оплаты T-Bank (карта или выбор СБП) — и `sbp_url` — прямая СБП-ссылка `qr.nspk.ru`, которую клиент открывает сразу в приложении своего банка. **По умолчанию отдавайте клиенту `sbp_url`**: СБП-эквайринг обходится партнёру заметно дешевле карточного, а клиент не заполняет карточную форму. `sbp_url` best-effort — приходит `null`, если СБП-QR не выпустился или это повтор платёжной сессии, созданной до 2026-07-23; тогда отдавайте `payment_url`. Обе ссылки дублируются в Telegram-чат партнёра.
 - **`create_partner_ruble_payable_product`** — submit a new **real** (non-test) RUB product for moderation, чтобы по нему можно было выставлять T-Bank оплаты. Обязательно: `product_name`, `price_rub` (целые рубли без копеек); `description` рекомендуется — клиент видит его на чекауте T-Bank. Как и в Mercury-варианте, это только **регистрация продукта в каталоге**: ссылки на оплату тул не даёт. После approve берите `product_id` из `list_partner_invoiceable_products({currency:'RUB'})` и вызывайте `create_partner_tbank_payment`. Требует permission `tbank_payment` — если его нет, сначала `request_additional_payment_methods` со словом `russia`.
 - **`list_partner_invoiceable_products`** — list products that can be re-invoiced (saves the partner from re-creating the same product twice).
+- **`list_partner_ruble_checkouts`** — показать всю рублёвую поверхность партнёра одним списком. Две сущности различаются полем `kind`: `static_link` — **постоянная** страница оплаты по адресу из `url`, её можно поставить на сайт или в бота, она не истекает; `one_off_product` — запись каталога, из которой `create_partner_tbank_payment` делает ссылку на 24 часа (передайте её `product_id`). У каждой строки: `taxation` (`usn` — УСН 6% или `patent`) — **`null` значит «не определён»** (продукт ещё на модерации либо режим вне контракта), и подавать это партнёру как УСН нельзя; `payment_flow` (`card_and_sbp` — полная форма T-Bank, `sbp_only` — только СБП-QR, карты закрыты); `price_rub` с границами `price_min_rub`/`price_max_rub` (у `one_off_product` границ нет — `null`) и флагом `price_overridable`; `status` (`active`, `pending_moderation`, `rejected`, `archived`). Фильтры `kind` и `status_filter` (`active` по умолчанию — показывает продаваемое плюс ожидающее модерации; `all` — вообще всё). Цену постоянной ссылки можно подставить query-параметром `?d=` (base64 от JSON), но **только в паре с `order_id`** — сумма без него игнорируется, и клиент заплатит цену по умолчанию.
 
 ### Money out: balances & payouts
 - **`get_partner_balance`** — show current balance per account: USD (Mercury / Chase), RUB (T-Bank), Crypto. The single source of truth for «сколько у меня сейчас».
@@ -143,6 +144,7 @@ EasyPay использует флаг `is_test` на уровне партнёр
 4. Mercury автоматически отправит инвойс клиенту по email. Партнёру скажите номер инвойса для трекинга.
 
 ### J1.3 — Accept payment from a Russian B2C customer (RUB)
+0. `list_partner_ruble_checkouts` → посмотреть, чем партнёр уже может принять рубли. Если есть подходящий `static_link` — часто ничего создавать не нужно: отдайте его `url` (при необходимости с ценой через `?d=` вместе с `order_id`).
 1. `list_partner_invoiceable_products({currency:'RUB'})` → найти RUB-продукт и его `product_id`. Если продукта нет — `create_partner_ruble_payable_product`, дождаться approve.
 2. `create_partner_tbank_payment` с `product_id` + `customer_email` ИЛИ `customer_phone` (+ опц. `unit_amount_override` в рублях).
 3. Отдайте клиенту `sbp_url` (СБП, `qr.nspk.ru`) — это дешевле для партнёра по эквайрингу; `payment_url` держите как запасной вариант и для тех, кто хочет платить картой. Если `sbp_url` пришёл `null` — отдавайте только `payment_url`. Обе ссылки партнёр увидит и у себя в Telegram-чате.
@@ -151,6 +153,12 @@ EasyPay использует флаг `is_test` на уровне партнёр
 ### J1 (alt) — Customer prefers crypto
 1. `create_partner_crypto_invoice` с `amount_usd`, `customer_email` (+ опц. `cryptos: ['USDT','USDC']`).
 2. Отдать партнёру кошелёк + сумму. Платёж засчитается после N подтверждений.
+
+### J1.5 — «Какие у меня рублёвые чекауты / на каком я налоге?»
+1. `list_partner_ruble_checkouts` — один вызов отвечает на всё сразу.
+2. Отвечая, разделяйте постоянные ссылки (`static_link` — можно публиковать) и разовые продукты (`one_off_product` — ссылка живёт 24 часа).
+3. Про налог говорите ровно то, что в ответе: `usn` — УСН 6%, `patent` — патент, `null` — «ещё не определён, уточним у EasyPay». Не додумывайте.
+4. Нужна новая постоянная ссылка — её заводит команда EasyPay: `send_request_to_easypay_care_team` с названием, ценой и нужным способом оплаты.
 
 ### J5 / J17 — «Сколько у меня сейчас денег?»
 1. `get_partner_balance` → показать **все валюты** разом.
