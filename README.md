@@ -8,7 +8,7 @@ Connect your AI agent to **EasyPay** in one command. Speak natural language:
 > «Выставь банковский инвойс на $1200 john@example.com»
 > «Организуй выплату подрядчику в РФ на 200 000 ₽ с наших долларов»
 
-The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto / T-Bank, USD / EUR / RUB / CRYPTO, product lifecycle, payout flow) and which of the 27 MCP tools to call for each job.
+The skill teaches your agent the EasyPay vocabulary (Stripe / Mercury / Crypto / T-Bank, USD / EUR / GBP / BRL / RUB / CRYPTO, product lifecycle, payout flow) and which of the 27 MCP tools to call for each job.
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: easypay
 description: EasyPay payments — create products, payment links, invoices and request payouts via natural language. Use when the user mentions payment processing, Stripe, Mercury, crypto invoices, T-Bank, СБП, balance, payout, EasyPay, или просит «принять оплату», «создать платёжку», «выставить инвойс», «вывести деньги».
-version: 0.9.2
+version: 0.10.0
 ---
 
 # EasyPay payments skill
@@ -35,7 +35,7 @@ All tools live under the MCP server `easypay-payments-mcp`.
 - **`request_additional_payment_methods`** — partner asks to enable a payment method that is not currently active (e.g. T-Bank for an existing US-only partner). Creates a request to the care team.
 
 ### Money in: products & payment links
-- **`create_partner_stripe_product`** — create a one-time or subscription product in Stripe. Goes through `pending_moderation → approved → live`. Used for: cards, wallets, BNPL, recurring billing in USD/EUR. Pass `is_test: true` to create a test-mode product (real card not charged) for partner-side experimentation; `is_test: false` (default) creates a real-mode product. **Both go through the same care-team moderation** (typically ≤ 2 hours).
+- **`create_partner_stripe_product`** — create a one-time or subscription product in Stripe. Goes through `pending_moderation → approved → live`. Used for: cards, wallets, BNPL, recurring billing in USD/EUR/GBP/BRL. Pass `is_test: true` to create a test-mode product (real card not charged) for partner-side experimentation; `is_test: false` (default) creates a real-mode product. **Both go through the same care-team moderation** (typically ≤ 2 hours).
 - **`create_partner_stripe_payment_link`** — generate a payment link for an already-approved Stripe product (re-use the product, get a fresh short URL).
 - **`create_partner_stripe_promotion_code`** — create one customer-facing percent-off code (например `BLACKFRIDAY`) и привязать его к 1..50 уже одобренным Stripe-продуктам партнёра. Обязательно: `stripe_product_ids` (`prod_*`), `code` (3–50 символов `A-Za-z0-9_-`, на чекауте матчится без учёта регистра, уникален в рамках партнёра), `percent_off` (1–100). Опционально: `duration` — `once` (дефолт, скидка на один платёж) / `forever` (на каждый цикл подписки) / `repeating` (+ обязательный `duration_in_months`), `max_redemptions` (общий лимит списаний), `expires_at` (Unix-секунды, только в будущем). Все продукты должны быть **одной среды** — все live или все test, смешали → `mixed_environment`; занятый код → `code_already_exists` (возьмите более уникальный, с префиксом бренда). **Код сработает только на ссылке, где включён ввод промокодов** (`allow_promo_codes: true` в `create_partner_stripe_product` либо `allow_promotion_codes: true` в `create_partner_stripe_payment_link`) — по умолчанию поля промокода на чекауте нет.
 - **`list_partner_live_stripe_payment_links`** — show currently active Stripe payment links (for re-sending or audit).
@@ -74,7 +74,7 @@ If a partner asks "where do I see notifications?" — they arrive in their perso
 ### Payment methods
 | Method | Currencies | Best for | Notes |
 |--------|-----------|----------|-------|
-| **Stripe** | USD, EUR | Global B2C, recurring, BNPL | Full lifecycle: pending → approved → live. SEPA «fragile» (известны failed payments). |
+| **Stripe** | USD, EUR, GBP, BRL | Global B2C, recurring, BNPL | Full lifecycle: pending → approved → live. SEPA «fragile» (известны failed payments). |
 | **Mercury invoice** | USD | B2B in USA, EU clients paying USD | Customer pays by ACH/wire. EUR не поддерживается. |
 | **Crypto (Shkeeper)** | USDT, USDC | Customer prefers crypto, fast settlement | Ходит через `Shkeeper`. |
 | **T-Bank** | RUB | Russian B2C (cards + СБП) | Текущий терминал ограничен MCC «образование» — для других ниш нужен второй терминал. |
@@ -82,6 +82,8 @@ If a partner asks "where do I see notifications?" — they arrive in their perso
 ### Currencies & balances
 - **USD** — Mercury / Chase (US business account)
 - **EUR** — приём через Stripe; выплаты в EUR доступны не по всем направлениям — сверяйтесь с `preview_partner_payout_options`
+- **GBP** — приём через Stripe (карта и Stripe Link)
+- **BRL** — приём через Stripe для бразильских покупателей. На чекауте доступны карта, Stripe Link и **Pix** — основной способ оплаты в Бразилии. Работает и для разовых платежей, и для подписок. Учтите бразильский налог IOF 3.5%: по умолчанию его платит покупатель сверх цены
 - **RUB** — T-Bank эквайринг; выплаты в РФ (в том числе самозанятым) идут через партнёрские каналы EasyPay — маршрут и комиссию покажет `preview_partner_payout_options`
 - **CRYPTO** — USDT / USDC (приём через Shkeeper; конверсию в фиат делает EasyPay на своей стороне)
 
@@ -124,9 +126,9 @@ EasyPay использует флаг `is_test` на уровне партнёр
 4. Подтверди результат через `list_partner_stripe_transactions` (`environment: "test"`) и/или `register_partner_notifications_webhook` (`test_url`).
 5. Убедился → `send_request_to_easypay_care_team` со списком того, что продаёт → команда заботы подключит реальные продукты. Это путь тест → live, не сразу прод.
 
-### J1 / J6 — Sell a one-time service to an international customer (USD/EUR)
+### J1 / J6 — Sell a one-time service to an international customer (USD/EUR/GBP/BRL)
 1. `verify_partner_credentials` → подтвердить что Stripe доступен.
-2. `create_partner_stripe_product` с названием, ценой, валютой, payment methods (`card`, опц. `paypal`, `klarna`, `afterpay_clearpay`).
+2. `create_partner_stripe_product` с названием, ценой, валютой, payment methods (`card`, опц. `klarna`, `afterpay_clearpay` — доступны для USD). Для BRL набор другой: `card`, `link`, `pix`. Набор способов зависит от валюты — несовместимый Stripe отклонит.
 3. Объяснить партнёру: продукт ушёл на модерацию, уведомление об approve придёт в Telegram — в личку через `@easypay_onboarding_bot` либо в общую группу, если она заведена.
 4. Когда approved — `create_partner_stripe_payment_link` → отдать короткую ссылку клиенту.
 
