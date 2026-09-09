@@ -126,7 +126,7 @@ Permission gating is enforced per endpoint — `verify_partner_credentials` retu
 
 ## What's inside
 
-- [`SKILL.md`](./SKILL.md) — the system prompt: 27 tools, EasyPay domain language, JTBD flows, anti-patterns.
+- [`SKILL.md`](./SKILL.md) — the system prompt: 28 tools, EasyPay domain language, JTBD flows, anti-patterns.
 - [`LICENSE`](./LICENSE) — MIT.
 
 ---
